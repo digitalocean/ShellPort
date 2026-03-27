@@ -18,27 +18,22 @@ jobs:
       - name: Build release packages
         run: |
           VERSION="${GITHUB_REF_NAME}"
+          echo "Building ${VERSION}"
 
-          # Universal package (what everyone downloads)
-          tar -czf "shellport-${VERSION}.tar.gz" \
-            --exclude='.git' \
-            --exclude='.github' \
-            --exclude='admin' \
-            --exclude='.env' \
-            .
+          mkdir -p /tmp/universal /tmp/admin
 
-          zip -r "shellport-${VERSION}.zip" . \
-            -x '.git/*' \
-            -x '.github/*' \
-            -x 'admin/*' \
-            -x '.env'
+          rsync -a --exclude='.git' --exclude='.github' --exclude='.env' --exclude='admin' . /tmp/universal/
+          rsync -a --exclude='.git' --exclude='.github' --exclude='.env' . /tmp/admin/
 
-          # Admin package (includes MDM reset scripts)
-          tar -czf "shellport-${VERSION}-admin.tar.gz" \
-            --exclude='.git' \
-            --exclude='.github' \
-            --exclude='.env' \
-            .
+          cd /tmp/universal
+          tar -czf "${GITHUB_WORKSPACE}/shellport-${VERSION}.tar.gz" .
+          zip -r "${GITHUB_WORKSPACE}/shellport-${VERSION}.zip" .
+
+          cd /tmp/admin
+          tar -czf "${GITHUB_WORKSPACE}/shellport-${VERSION}-admin.tar.gz" .
+
+          cd "${GITHUB_WORKSPACE}"
+          ls -la shellport-*.tar.gz shellport-*.zip install.sh Install.ps1
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
