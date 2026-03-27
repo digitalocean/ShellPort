@@ -1,0 +1,12 @@
+services:
+  interview-env:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile
+    volumes:
+      - candidate_workspace:/workspaces
+    command: sleep infinity
+    restart: unless-stopped
+
+volumes:
+  candidate_workspace:

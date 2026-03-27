@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShellPort</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #080c10; --surface: #0f1318; --surface2: #151b22; --surface3: #1c232c;
+  --border: #1e2730; --border-lit: #2a3542;
+  --text: #e2e8f0; --text2: #94a3b8; --muted: #64748b;
+  --accent: #06d6a0; --accent2: #0891b2; --accent-glow: #06d6a020;
+  --red: #f43f5e; --orange: #fb923c; --yellow: #fbbf24;
+  --mono: "JetBrains Mono", monospace;
+  --sans: "DM Sans", -apple-system, sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+::selection{background:var(--accent);color:var(--bg)}
+body::before{content:"";position:fixed;inset:0;background:
+  linear-gradient(var(--border) 1px,transparent 1px),
+  linear-gradient(90deg,var(--border) 1px,transparent 1px);
+  background-size:60px 60px;opacity:0.12;pointer-events:none;z-index:0}
+body::after{content:"";position:fixed;top:-40%;right:-20%;width:800px;height:800px;
+  background:radial-gradient(circle,var(--accent-glow) 0%,transparent 70%);pointer-events:none;z-index:0}
+.page{position:relative;z-index:1;max-width:780px;margin:0 auto;padding:48px 24px 80px}
+.header{margin-bottom:40px}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.logo-icon{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center}
+.logo-icon svg{width:18px;height:18px;fill:var(--bg)}
+.logo h1{font-family:var(--mono);font-size:22px;font-weight:700;letter-spacing:-0.02em}
+.logo h1 span{color:var(--accent)}
+.tagline{font-size:13px;color:var(--muted);letter-spacing:0.02em}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px;margin-bottom:14px;animation:slideUp 0.4s ease both}
+.card+.card{animation-delay:0.06s}
+.card h2{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:18px}
+.card h3{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin:20px 0 12px}
+@keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.progress-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.progress-label{font-family:var(--mono);font-size:12px;color:var(--text2)}
+.progress-pct{font-family:var(--mono);font-size:12px;color:var(--accent);font-weight:600}
+.progress-track{height:6px;background:var(--surface3);border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:3px;transition:width 0.6s cubic-bezier(.4,0,.2,1);position:relative}
+.progress-fill::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent 40%,rgba(255,255,255,0.15) 50%,transparent 60%);animation:shimmer 2s infinite}
+@keyframes shimmer{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+.steps{margin-top:16px}
+.step{display:flex;align-items:center;gap:10px;padding:5px 0;font-size:13px;color:var(--muted);transition:color 0.3s}
+.step.done{color:var(--text2)}.step.running{color:var(--accent)}.step.error{color:var(--red)}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:var(--surface3);transition:all 0.3s}
+.step.done .dot{background:var(--accent);box-shadow:0 0 6px var(--accent-glow)}
+.step.running .dot{background:var(--accent);animation:blink 1s infinite}
+.step.error .dot{background:var(--red)}.step.warning .dot{background:var(--orange)}.step.skipped .dot{background:var(--muted)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+.ide-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.ide-btn{position:relative;padding:14px 16px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--mono);font-size:12px;font-weight:500;cursor:pointer;transition:all 0.2s;text-align:left;overflow:hidden}
+.ide-btn:hover{border-color:var(--accent);background:var(--surface3);transform:translateY(-1px)}
+.ide-btn:active{transform:translateY(0)}
+.ide-btn.primary{border-color:var(--accent2);background:linear-gradient(135deg,#0891b215,#06d6a010)}
+.ide-btn.primary:hover{border-color:var(--accent);background:linear-gradient(135deg,#0891b225,#06d6a020)}
+.ide-btn small{display:block;color:var(--muted);font-family:var(--sans);font-size:11px;margin-top:3px;font-weight:400}
+.question-box{background:linear-gradient(135deg,var(--surface2),var(--surface3));border:1px solid var(--border-lit);border-radius:10px;padding:28px;font-size:14px;line-height:1.8;color:var(--text);position:relative;max-height:600px;overflow-y:auto}
+.question-box::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px 2px 0 0}
+.question-box h1,.question-box h2,.question-box h3,.question-box h4,.question-box h5{font-family:var(--mono);color:var(--accent);margin:18px 0 8px;line-height:1.4}
+.question-box h1{font-size:18px}.question-box h2{font-size:16px}.question-box h3{font-size:14px}.question-box h4{font-size:13px}
+.question-box h1:first-child,.question-box h2:first-child,.question-box h3:first-child,.question-box h4:first-child{margin-top:0}
+.question-box p{margin:8px 0}
+.question-box ul,.question-box ol{margin:8px 0 8px 24px}
+.question-box li{margin:4px 0}
+.question-box code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:2px 6px;border-radius:4px;color:var(--accent)}
+.question-box pre{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin:12px 0;overflow-x:auto}
+.question-box pre code{background:none;padding:0;font-size:12px;color:var(--text2)}
+.question-box a{color:var(--accent2);text-decoration:underline}
+.question-box table{border-collapse:collapse;width:100%;margin:12px 0}
+.question-box td,.question-box th{border:1px solid var(--border);padding:8px 10px;font-size:13px;text-align:left}
+.question-box th{background:var(--surface3);font-weight:600}
+.question-box img{max-width:100%;height:auto;border-radius:6px;margin:8px 0}
+.question-box strong,.question-box b{color:var(--text);font-weight:600}
+.question-box hr{border:none;border-top:1px solid var(--border);margin:16px 0}
+.question-error{color:var(--orange);font-size:12px;padding:10px 14px;background:#fb923c08;border:1px solid #fb923c20;border-radius:8px}
+.assigned-question{padding:14px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px}
+.assigned-question .aq-title{font-family:var(--mono);font-weight:600;color:var(--accent);font-size:14px;margin-bottom:4px}
+.assigned-question .aq-note{color:var(--muted);font-size:11px;margin-top:6px}
+.question-loading{color:var(--muted);font-style:italic}
+.question-note{font-size:12px;color:var(--muted);margin-top:14px;line-height:1.5}
+.timer-wrap{display:flex;align-items:baseline;gap:20px;padding:20px;border-radius:10px;background:var(--surface2);border:1px solid var(--border)}
+.timer-wrap.expired{border-color:var(--red);background:#f43f5e08}
+.timer-big{font-family:var(--mono);font-size:42px;font-weight:700;color:var(--accent);letter-spacing:-0.03em;font-variant-numeric:tabular-nums}
+.timer-wrap.expired .timer-big{color:var(--red)}
+.timer-meta{font-size:12px;color:var(--muted);line-height:2}
+.timer-meta span{font-family:var(--mono)}
+.timer-meta b{color:var(--text2);font-weight:500}
+.timer-alert{margin-top:10px;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:500;background:#fb923c10;border:1px solid #fb923c30;color:var(--orange)}
+.config-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)}
+.config-row:last-child{border-bottom:none}
+.config-label{font-size:13px}
+.config-label small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.toggle{width:40px;height:22px;border-radius:11px;background:var(--surface3);cursor:pointer;position:relative;transition:background 0.25s;flex-shrink:0;border:1px solid var(--border)}
+.toggle.on{background:var(--accent);border-color:var(--accent)}
+.toggle::after{content:"";width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:transform 0.25s cubic-bezier(.4,0,.2,1)}
+.toggle.on::after{transform:translateX(18px)}
+.config-panel{padding:16px 0;animation:slideUp 0.3s ease}
+.input-group{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.input-group label{min-width:130px;font-size:12px;color:var(--text2)}
+.input-group input,.input-group select{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-family:var(--mono);font-size:12px;width:160px}
+.input-group select{width:174px;cursor:pointer}
+.input-group input:focus,.input-group select:focus{outline:none;border-color:var(--accent)}
+.save-btn{font-family:var(--mono);font-size:11px;padding:8px 16px;border-radius:6px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;transition:all 0.2s;margin-top:4px}
+.save-btn:hover{background:var(--accent);color:var(--bg)}
+.stat-row{display:flex;gap:10px}
+.stat{flex:1;text-align:center;padding:16px 10px;background:var(--surface2);border-radius:10px;border:1px solid var(--border)}
+.stat-val{font-family:var(--mono);font-size:30px;font-weight:700;color:var(--accent)}
+.stat-lbl{font-size:11px;color:var(--muted);margin-top:4px}
+.actions{display:flex;gap:10px}
+.btn{font-family:var(--mono);font-size:12px;font-weight:500;padding:10px 20px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;transition:all 0.2s}
+.btn:hover{border-color:var(--text2);background:var(--surface3)}
+.btn.danger{border-color:#f43f5e40;color:var(--red)}
+.btn.danger:hover{background:#f43f5e10;border-color:var(--red)}
+.btn:disabled{opacity:0.3;cursor:not-allowed;pointer-events:none}
+.issue{background:#f43f5e08;border:1px solid #f43f5e20;border-radius:8px;padding:12px 14px;font-size:13px;margin-top:10px;color:var(--red)}
+.done-wrap{text-align:center;padding:20px 0}
+.done-wrap h2{font-size:16px!important;color:var(--text)!important;text-transform:none!important;letter-spacing:normal!important}
+.done-wrap p{color:var(--muted);font-size:14px;margin-top:8px}
+details summary{font-family:var(--mono);font-size:11px;color:var(--muted);cursor:pointer;padding:8px 0}
+.log-box{background:#050709;border:1px solid var(--border);border-radius:8px;padding:12px;max-height:200px;overflow-y:auto;font-family:var(--mono);font-size:11px;line-height:1.5;color:#475569}
+.note{font-size:12px;color:var(--muted);margin-top:14px;line-height:1.6}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <div class="logo">
+      <div class="logo-icon"><svg viewBox="0 0 24 24"><path d="M4 17l6-6-6-6M12 19h8"/></svg></div>
+      <h1>Shell<span>Port</span></h1>
+    </div>
+    <div class="tagline">Ephemeral coding interview workstation</div>
+  </div>
+
+  <!-- SETUP / RESET PROGRESS -->
+  <div class="card" id="card-progress">
+    <h2 id="progress-title">Preparing environment</h2>
+    <div class="progress-head">
+      <div class="progress-label" id="progress-text">Initializing</div>
+      <div class="progress-pct" id="progress-pct">0%</div>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="progress-bar" style="width:0%"></div></div>
+    <div class="steps" id="progress-steps"></div>
+  </div>
+
+  <!-- QUESTION (always visible once loaded) -->
+  <div class="card hidden" id="card-question">
+    <h2>Interview Question</h2>
+    <div class="question-box" id="question-box">
+      <span class="question-loading">Loading question...</span>
+    </div>
+    <p class="question-note">Read through this while your environment builds. You can start working once your IDE is open.</p>
+  </div>
+
+  <!-- IDE LAUNCH -->
+  <div class="card hidden" id="card-ide">
+    <h2>Environment Ready</h2>
+    <div class="ide-grid" id="ide-buttons"></div>
+    <p class="note">All work must be saved inside <strong>/workspaces</strong>. Everything outside is destroyed on cleanup.</p>
+  </div>
+
+  <!-- TIMER -->
+  <div class="card hidden" id="card-timer">
+    <h2>Session Timer</h2>
+    <div class="timer-wrap" id="timer-wrap">
+      <div class="timer-big" id="timer-display">00:00:00</div>
+      <div class="timer-meta">
+        <div><b>Active</b> <span id="t-active">00:00:00</span></div>
+        <div><b>Idle</b> <span id="t-idle">00:00:00</span></div>
+        <div><b>Limit</b> <span id="t-limit">--:--:--</span></div>
+        <div><b>Action</b> <span id="t-action">--</span></div>
+      </div>
+    </div>
+    <div id="timer-alert" class="timer-alert hidden"></div>
+  </div>
+
+  <!-- ADMIN -->
+  <div class="card hidden" id="card-admin">
+    <h2>Admin Panel</h2>
+    <h3>Features</h3>
+    <div id="admin-features"></div>
+    <div id="timer-config" class="hidden">
+      <h3>Timer Settings</h3>
+      <div class="config-panel">
+        <div class="input-group">
+          <label>On expiry</label>
+          <select id="cfg-action">
+            <option value="NOTIFY">NOTIFY - announce only</option>
+            <option value="LOCK">LOCK - freeze workspace</option>
+            <option value="WIPE">WIPE - auto cleanup</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Time limit (min)</label>
+          <input type="number" id="cfg-limit" min="1" max="480" value="60">
+        </div>
+        <div class="input-group">
+          <label>Idle threshold (min)</label>
+          <input type="number" id="cfg-inactivity" min="1" max="60" value="10">
+        </div>
+        <button class="save-btn" onclick="saveTimerConfig()">Save</button>
+      </div>
+    </div>
+
+    <div id="admin-question" class="hidden">
+      <h3>Question Assignment</h3>
+      <div class="assigned-question" id="assigned-question"></div>
+    </div>
+
+    <div id="admin-telemetry" class="hidden">
+      <h3>Telemetry</h3>
+      <div class="stat-row" id="telemetry-stats"></div>
+    </div>
+  </div>
+
+  <!-- ACTIONS -->
+  <div class="card hidden" id="card-actions">
+    <div class="actions">
+      <button class="btn danger" id="btn-end" onclick="endInterview()">End Interview</button>
+      <button class="btn danger hidden" id="btn-reset" onclick="adminReset()">Reset for Next Candidate</button>
+    </div>
+  </div>
+
+  <!-- DONE -->
+  <div class="card hidden" id="card-done">
+    <div class="done-wrap">
+      <h2>ShellPort removed</h2>
+      <p>Nothing left behind. Thank you for interviewing with us.</p>
+    </div>
+  </div>
+
+  <!-- LOG -->
+  <details>
+    <summary>build log</summary>
+    <div class="log-box" id="build-log"></div>
+  </details>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+let ws, S={status:"initializing",steps:[],config:{},ides:[],question:null,questionHtml:null,questionError:null,questionLoading:false,questionVisible:true,timer:null,adminMode:false};
+let currentPct = 0;
+
+function fmt(s){if(s==null)return"--:--:--";const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=s%60;
+return`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(x).padStart(2,"0")}`}
+
+function connect(){
+  ws=new WebSocket(`${location.protocol==="https:"?"wss:":"ws:"}//${location.host}`);
+  ws.onmessage=e=>handle(JSON.parse(e.data));
+  ws.onclose=()=>setTimeout(connect,2000);
+}
+
+function handle(msg){
+  switch(msg.type){
+    case"init":S=msg.state;render();break;
+    case"status":S.status=msg.status;render();break;
+    case"step":upsert(msg);break;
+    case"progress":setProgress(msg.pct,msg.phase);break;
+    case"log":appendLog(msg.line);break;
+    case"question":
+      S.question=msg.text;S.questionHtml=msg.html;S.questionError=msg.error;S.questionLoading=false;
+      renderQuestion();if(S.adminMode)renderAdmin();break;
+    case"question_loading":S.questionLoading=true;renderQuestion();if(S.adminMode)renderAdmin();break;
+    case"question_visibility":S.questionVisible=msg.visible;renderQuestion();if(S.adminMode)renderAdmin();break;
+    case"clear_steps":$("progress-steps").innerHTML="";break;
+    case"timer":S.timer=msg;renderTimer();break;
+    case"timer_expired":onExpired(msg);break;
+    case"timer_stopped":S.timer=null;$("card-timer").classList.add("hidden");break;
+    case"telemetry":renderTelemetry(msg.data);break;
+    case"cleanup_issues":renderIssues(msg.issues);break;
+    case"cleanup_complete":S.status="done";render();break;
+    case"config":S.config=msg.config;renderAdmin();break;
+  }
+}
+
+function render(){
+  const s=S.status;
+
+  // Progress card
+  $("card-progress").classList.toggle("hidden",s==="ready"||s==="done");
+  if(s==="setup")$("progress-title").textContent="Preparing environment";
+  else if(s==="resetting")$("progress-title").textContent="Resetting for next candidate";
+  else if(s==="cleanup")$("progress-title").textContent="Cleaning up";
+  else if(s==="error")$("progress-title").textContent="Setup failed";
+
+  renderQuestion();
+  $("card-ide").classList.toggle("hidden",s!=="ready");
+  if(s==="ready"){
+    renderIDEs();
+    $("btn-end").disabled=false;
+    $("btn-reset").disabled=false;
+  }
+
+  $("card-timer").classList.toggle("hidden",!(s==="ready"&&S.timer));
+  if(S.timer)renderTimer();
+
+  $("card-admin").classList.toggle("hidden",!S.adminMode||s==="done"||s==="cleanup");
+  if(S.adminMode)renderAdmin();
+
+  $("card-actions").classList.toggle("hidden",s!=="ready");
+  $("btn-reset").classList.toggle("hidden",!S.adminMode);
+
+  $("card-done").classList.toggle("hidden",s!=="done");
+
+  (S.steps||[]).forEach(st=>upsert(st));
+}
+
+function upsert(step){
+  const box=$("progress-steps");
+  let el=box.querySelector(`[data-id="${step.id}"]`);
+  if(!el){el=document.createElement("div");el.className="step";el.dataset.id=step.id;
+    el.innerHTML=`<div class="dot"></div><span></span>`;box.appendChild(el)}
+  el.className=`step ${step.status}`;el.querySelector("span").textContent=step.label;
+  if(step.status==="running")$("progress-text").textContent=step.label;
+  else if(step.status==="done"&&S.status==="ready")$("progress-text").textContent="Ready";
+}
+
+function setProgress(pct){
+  currentPct=pct;
+  $("progress-bar").style.width=pct+"%";
+  $("progress-pct").textContent=pct+"%";
+}
+
+function appendLog(line){const l=$("build-log");l.textContent+=line+"\n";l.scrollTop=l.scrollHeight}
+
+function renderQuestion(){
+  const box=$("question-box");
+  const card=$("card-question");
+  const s=S.status;
+  
+  if(s==="cleanup"||s==="done"){
+    card.classList.add("hidden");
+    return;
+  }
+  // Admin can hide questions from candidate view
+  if(!S.questionVisible && !S.adminMode){
+    card.classList.add("hidden");
+    return;
+  }
+  // No URL configured at all
+  if(!S.questionLoading && !S.question && !S.questionHtml && S.questionError === "Set QUESTIONS_URL in .env"){
+    card.classList.add("hidden");
+    return;
+  }
+  card.classList.remove("hidden");
+  if(S.questionLoading){
+    box.innerHTML=`<span class="question-loading">Loading interview question...</span>`;
+    return;
+  }
+  if(S.questionError && !S.question && !S.questionHtml){
+    box.innerHTML=`<div class="question-error">${esc(S.questionError)}</div>`;
+    return;
+  }
+  if(!S.question && !S.questionHtml){
+    card.classList.add("hidden");
+    return;
+  }
+  if(!S.questionVisible){
+    box.innerHTML=`<span class="question-loading" style="color:var(--orange)">Question hidden from candidate. Toggle visibility below.</span>`;
+    return;
+  }
+  if(S.questionHtml){
+    box.innerHTML = S.questionHtml;
+    return;
+  }
+  box.innerHTML = formatQuestion(S.question);
+}
+
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+
+function formatQuestion(text){
+  const lines = text.split("\n");
+  let html = "";
+  let inTable = false;
+  
+  for(let i=0;i<lines.length;i++){
+    const line = lines[i];
+    const trimmed = line.trim();
+    if(!trimmed){ if(inTable){inTable=false;html+="</div>"} html+="<br>"; continue; }
+    
+    // Detect table rows (lines with Tab separators like "Item\tDetails")
+    if(trimmed.includes("\t") && trimmed.split("\t").length === 2){
+      const [k,v] = trimmed.split("\t");
+      if(!inTable){inTable=true;html+=`<div class="q-table">`}
+      html+=`<div class="q-table-cell q-table-head">${esc(k.trim())}</div><div class="q-table-cell">${esc(v.trim())}</div>`;
+      continue;
+    }
+    if(inTable){inTable=false;html+="</div>"}
+    
+    // Detect headers: short lines followed by content, or lines ending with ":"
+    const isHeader = (
+      (trimmed.length < 60 && trimmed === trimmed.replace(/[a-z]/g,"")) ||
+      (trimmed.length < 80 && !trimmed.endsWith(".") && !trimmed.startsWith("●") && !trimmed.startsWith("-") && !trimmed.startsWith("•") &&
+       i+1 < lines.length && lines[i+1].trim().length > 0 && 
+       (trimmed.endsWith(":") || /^[A-Z][A-Za-z &,]+$/.test(trimmed) || /^[A-Z][A-Za-z ]+[A-Za-z]$/.test(trimmed)))
+    );
+    
+    if(isHeader){
+      html+=`<h4>${esc(trimmed.replace(/:$/,""))}</h4>`;
+      continue;
+    }
+    
+    if(trimmed.startsWith("●") || trimmed.startsWith("•") || trimmed.startsWith("- ")){
+      const content = trimmed.replace(/^[●•\-]\s*/, "");
+      html+=`<div class="q-item">${esc(content)}</div>`;
+      continue;
+    }
+    
+    html+=`<div class="q-section">${esc(trimmed)}</div>`;
+  }
+  if(inTable) html+="</div>";
+  return html;
+}
+
+function renderIDEs(){
+  const g=$("ide-buttons");if(g.children.length)return;
+  if(!S.ides || S.ides.length === 0){
+    g.innerHTML=`<p style="color:var(--muted);font-size:13px;">No supported IDE detected. Install VS Code, Cursor, or Windsurf.</p>`;
+    return;
+  }
+  S.ides.forEach(ide=>{
+    const b=document.createElement("button");
+    b.className="ide-btn";
+    b.innerHTML=`${ide.name}<small>Open in Dev Container</small>`;
+    b.onclick=()=>launchIDE(ide.name);g.appendChild(b);
+  });
+}
+
+async function launchIDE(name){
+  const res=await fetch("/api/launch",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ide:name})});
+  const d=await res.json();if(d.url)window.open(d.url,"_blank");if(d.instruction)alert(d.instruction);
+}
+
+function renderTimer(){
+  const t=S.timer;if(!t)return;
+  $("timer-display").textContent=fmt(t.active);
+  $("t-active").textContent=fmt(t.active);$("t-idle").textContent=fmt(t.idle);
+  $("t-limit").textContent=fmt(t.limitSecs);$("t-action").textContent=t.action;
+  $("timer-wrap").classList.toggle("expired",!!t.expired);
+}
+function onExpired(msg){$("timer-alert").textContent=msg.message;$("timer-alert").classList.remove("hidden")}
+
+function renderAdmin(){
+  const c=S.config||{};const f=$("admin-features");
+  const defs=[
+    {key:"ENABLE_TIMER",label:"Session Timer",desc:"Track active/idle time with enforcement options"},
+    {key:"ENABLE_TELEMETRY",label:"Telemetry",desc:"Export AI usage, shell history, and Git activity"},
+    {key:"ENABLE_ARCHIVE",label:"Archive",desc:"Zip workspace to DigitalOcean Spaces on cleanup"},
+  ];
+  if(!f.children.length){
+    defs.forEach(d=>{
+      const row=document.createElement("div");row.className="config-row";
+      row.innerHTML=`<div class="config-label">${d.label}<small>${d.desc}</small></div>
+        <div class="toggle ${c[d.key]==="true"?"on":""}" data-key="${d.key}"></div>`;
+      row.querySelector(".toggle").onclick=e=>toggleFeature(e.currentTarget,d.key);
+      f.appendChild(row);
+    });
+  }else{f.querySelectorAll(".toggle").forEach(el=>el.classList.toggle("on",c[el.dataset.key]==="true"))}
+  $("timer-config").classList.toggle("hidden",c.ENABLE_TIMER!=="true");
+  if(c.ENABLE_TIMER==="true"){
+    $("cfg-action").value=c.TIMEOUT_ACTION||"NOTIFY";
+    $("cfg-limit").value=c.TIME_LIMIT_MINUTES||"60";
+    $("cfg-inactivity").value=c.INACTIVITY_TIMEOUT_MINUTES||"10";
+  }
+
+  const aq=$("admin-question");
+  if(S.question || S.questionLoading){
+    aq.classList.remove("hidden");
+    let html = "";
+    if(S.questionLoading){
+      html=`<div class="assigned-question"><div style="color:var(--muted)">Loading question...</div></div>`;
+    }else if(S.question){
+      html=`<div class="assigned-question">
+        <div class="aq-title">${esc(S.question)}</div>
+        <div class="aq-note">Randomly assigned. Visible to candidate: <strong>${S.questionVisible?"Yes":"No"}</strong></div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="save-btn" onclick="rerollQuestion()">Reroll</button>
+          <button class="save-btn" onclick="toggleQuestionVisibility()">${S.questionVisible?"Hide from candidate":"Show to candidate"}</button>
+        </div>
+      </div>`;
+    }
+    $("assigned-question").innerHTML=html;
+  }else{
+    aq.classList.add("hidden");
+  }
+}
+
+async function toggleFeature(el,key){
+  const on=el.classList.toggle("on");S.config={...S.config,[key]:on?"true":"false"};renderAdmin();
+  await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(S.config)});
+}
+
+async function saveTimerConfig(){
+  const cfg={...S.config,TIMEOUT_ACTION:$("cfg-action").value,
+    TIME_LIMIT_MINUTES:$("cfg-limit").value,INACTIVITY_TIMEOUT_MINUTES:$("cfg-inactivity").value};
+  S.config=cfg;
+  const res=await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(cfg)});
+  const d=await res.json();
+  if(d.saved){const b=document.querySelector(".save-btn");b.textContent="Saved";b.style.borderColor="var(--accent)";
+    setTimeout(()=>{b.textContent="Save";b.style.borderColor=""},1500)}
+}
+
+function renderTelemetry(data){
+  $("admin-telemetry").classList.remove("hidden");
+  const sh=(data.shellHistory||"").split("\n").filter(l=>l.trim()).length;
+  const gi=(data.gitLog||"").split("\n").filter(l=>l.trim()).length;
+  const fi=(data.files||"").split("\n").filter(l=>l.trim()).length;
+  $("telemetry-stats").innerHTML=`
+    <div class="stat"><div class="stat-val">${sh}</div><div class="stat-lbl">Shell commands</div></div>
+    <div class="stat"><div class="stat-val">${gi}</div><div class="stat-lbl">Git commits</div></div>
+    <div class="stat"><div class="stat-val">${fi}</div><div class="stat-lbl">Files created</div></div>`;
+}
+
+async function rerollQuestion(){
+  S.questionLoading=true;S.question=null;S.questionHtml=null;
+  renderQuestion();renderAdmin();
+  await fetch("/api/reroll",{method:"POST"});
+}
+
+async function toggleQuestionVisibility(){
+  await fetch("/api/question-toggle",{method:"POST"});
+}
+
+function renderIssues(issues){
+  if(!issues||!issues.length)return;
+  const box=document.createElement("div");
+  issues.forEach(i=>{const d=document.createElement("div");d.className="issue";d.textContent=i;box.appendChild(d)});
+  $("progress-steps").after(box);
+}
+
+async function endInterview(){
+  if(!confirm("End the interview and remove everything from this machine?"))return;
+  $("btn-end").disabled=true;$("btn-reset").disabled=true;
+
+  $("progress-steps").innerHTML="";
+  currentPct=0;setProgress(0);
+  await fetch("/api/cleanup",{method:"POST"});
+}
+
+async function adminReset(){
+  if(!confirm("Run full host teardown? This will:\n\n- Wipe all browsers and cached logins\n- Purge keychain/credential entries\n- Scrub IDE state and shell history\n- Destroy and rebuild the container\n\nYou will be prompted for your admin password."))return;
+  $("btn-end").disabled=true;$("btn-reset").disabled=true;
+  $("progress-steps").innerHTML="";
+  $("ide-buttons").innerHTML="";
+  S.question=null;S.questionHtml=null;S.questionLoading=true;S.questionVisible=true;
+  currentPct=0;setProgress(0);
+  renderQuestion();
+  await fetch("/api/reset",{method:"POST"});
+}
+
+connect();
+fetch("/api/state").then(r=>r.json()).then(s=>{S=s;render()});
+</script>
+</body>
+</html>

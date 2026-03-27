@@ -1,0 +1,72 @@
+{
+  "name": "ShellPort",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "interview-env",
+  "workspaceFolder": "/workspaces",
+  "remoteUser": "vscode",
+  "updateRemoteUserUID": false,
+  "features": {
+    "ghcr.io/devcontainers/features/go:1": {},
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "21",
+      "installGradle": "false",
+      "installMaven": "false"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "lts"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "postCreateCommand": "sudo chown -R vscode:vscode /workspaces && npm install -g @anthropic-ai/claude-code && rm -rf /home/vscode/.ssh /home/vscode/.gitconfig /home/vscode/.git-credentials /home/vscode/.netrc && git config --global credential.helper '' && git config --global user.name 'candidate' && git config --global user.email 'candidate@interview.local'",
+  "postStartCommand": "echo '' && echo 'ShellPort Ready' && echo '' && echo \"  Go:          $(go version 2>/dev/null | awk '{print $3}' || echo 'n/a')\" && echo \"  Python:      $(python3 --version 2>/dev/null | awk '{print $2}' || echo 'n/a')\" && echo \"  Java:        $(java --version 2>&1 | head -1 | awk '{print $2}' || echo 'n/a')\" && echo \"  Node.js:     $(node --version 2>/dev/null || echo 'n/a')\" && echo \"  npm:         $(npm --version 2>/dev/null || echo 'n/a')\" && echo \"  GitHub CLI:  $(gh --version 2>/dev/null | awk '{print $3}' || echo 'n/a')\" && echo \"  Claude Code: $(claude --version 2>/dev/null || echo 'n/a')\" && echo \"  doctl:       $(doctl version 2>/dev/null | awk '{print $3}' || echo 'n/a')\" && echo \"  Git:         $(git --version 2>/dev/null | awk '{print $3}' || echo 'n/a')\" && echo \"  Homebrew:    $(/home/linuxbrew/.linuxbrew/bin/brew --version 2>/dev/null | head -1 | awk '{print $2}' || echo 'n/a')\" && echo '' && echo '  Save all work inside /workspaces.' && echo '  Everything outside /workspaces is destroyed on cleanup.' && echo ''",
+  "remoteEnv": {
+    "HISTFILE": "/dev/null",
+    "HISTSIZE": "0",
+    "SAVEHIST": "0",
+    "NODE_REPL_HISTORY": "",
+    "PYTHONSTARTUP": "",
+    "GH_TOKEN": "",
+    "GITHUB_TOKEN": "",
+    "GITHUB_PAT": "",
+    "SSH_AUTH_SOCK": "",
+    "GIT_ASKPASS": "",
+    "VSCODE_GIT_ASKPASS_MAIN": "",
+    "VSCODE_GIT_ASKPASS_NODE": "",
+    "VSCODE_GIT_IPC_HANDLE": "",
+    "DOTNET_CLI_TELEMETRY_OPTOUT": "1"
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "remote.autoForwardPorts": false,
+        "remote.forwardOnOpen": false,
+        "remote.SSH.enableAgentForwarding": false,
+        "remote.SSH.forwardAgent": false,
+        "git.autofetch": false,
+        "git.allowForcePush": false,
+        "git.terminalAuthentication": false,
+        "github.gitAuthentication": false,
+        "terminal.integrated.env.linux": {
+          "GH_TOKEN": "",
+          "GITHUB_TOKEN": "",
+          "SSH_AUTH_SOCK": "",
+          "GIT_ASKPASS": ""
+        }
+      },
+      "extensions": [
+        "github.copilot",
+        "github.copilot-chat",
+        "golang.go",
+        "ms-python.python",
+        "ms-vscode.cpptools",
+        "vscjava.vscode-java-pack",
+        "redhat.vscode-yaml",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  }
+}

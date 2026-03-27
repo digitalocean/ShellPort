@@ -1,0 +1,9 @@
+.env
+.timer/
+.session_snapshot
+.session_snapshot.json
+.last_station_reset
+.current_question
+.server_pid
+.cache
+node_modules/
