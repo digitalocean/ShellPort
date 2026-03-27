@@ -63,7 +63,7 @@ Non-secret `.env.defaults`:
 
 Three options:
 
-**Option 1: Google Sheet + Google Docs (formatted, random)**
+**Option 1: Google Sheet + Google Docs (random)**
 
 Create a Google Sheet (row 1 = header, col A = title, col B = Doc ID). Create a Google Doc per question with full formatting. Share both as "Anyone with the link can view." Set `SHELLPORT_QUESTIONS` to the sheet URL. The server picks a random row, fetches the Doc as HTML, and renders it inside the dashboard.
 
@@ -71,9 +71,9 @@ Create a Google Sheet (row 1 = header, col A = title, col B = Doc ID). Create a 
 
 Same setup as Option 1. Set `SHELLPORT_QUESTION_ROW=3` to always load row 3. The admin knows the question ahead of time.
 
-**Option 3: Manual (email or verbal)**
+**Option 3: Manual**
 
-Don't set `SHELLPORT_QUESTIONS`. The question section is hidden from the dashboard entirely. Provide the question via email, Slack, or verbally before the interview. The candidate uses the dashboard only for environment setup and IDE launch.
+Don't set `SHELLPORT_QUESTIONS`. The question section is hidden from the dashboard entirely. Provide the question via email, placed on the computer, or verbally before the interview. The candidate uses the dashboard only for environment setup and IDE launch.
 
 ## Admin Mode
 
