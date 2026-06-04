@@ -831,11 +831,16 @@ async function launchIDE(ideName) {
 
   switch (ide.kind) {
     case "local": {
-      // Open the host editor attached to the running dev container.
+      // Attach the host editor to the dev container. --new-window forces a fresh
+      // window; without it a running editor swallows the URI and nothing opens.
       const hexPath = Buffer.from(ROOT).toString("hex");
       const uri = `vscode-remote://dev-container+${hexPath}/workspaces`;
-      if (IS_WIN) exec(`start "" "${ide.path}" --folder-uri "${uri}"`);
-      else exec(`"${ide.path}" --folder-uri "${uri}" &`);
+      const cmd = IS_WIN
+        ? `start "" "${ide.path}" --new-window --folder-uri "${uri}"`
+        : `"${ide.path}" --new-window --folder-uri "${uri}" &`;
+      exec(cmd, (err) => {
+        if (err) broadcast({ type: "log", line: `[launch] ${ideName} failed: ${err.message}` });
+      });
       return { launched: ideName };
     }
 
