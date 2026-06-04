@@ -5,6 +5,9 @@ services:
       dockerfile: .devcontainer/Dockerfile
     volumes:
       - candidate_workspace:/workspaces
+    ports:
+      # code-server (Browser IDE) — bound to loopback only, started on demand.
+      - "127.0.0.1:8080:8080"
     command: sleep infinity
     restart: unless-stopped
 

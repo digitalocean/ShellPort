@@ -31,6 +31,7 @@ jobs:
 
           cd /tmp/admin
           tar -czf "${GITHUB_WORKSPACE}/shellport-${VERSION}-admin.tar.gz" .
+          zip -r "${GITHUB_WORKSPACE}/shellport-${VERSION}-admin.zip" .
 
           cd "${GITHUB_WORKSPACE}"
           ls -la shellport-*.tar.gz shellport-*.zip install.sh Install.ps1

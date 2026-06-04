@@ -4,7 +4,6 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         build-essential \
         neovim \
-        s3cmd \
         imagemagick \
         jq \
  && apt-get clean \
@@ -21,6 +20,9 @@ RUN curl -fsSL \
         "https://github.com/digitalocean/doctl/releases/download/v${DOCTL_VERSION}/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz" \
         | tar -xz -C /usr/local/bin \
  && chmod +x /usr/local/bin/doctl
+
+# code-server - powers the "Browser" IDE (VS Code in the browser, served from the container)
+RUN curl -fsSL https://code-server.dev/install.sh | sh
 
 USER vscode
 

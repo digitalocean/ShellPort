@@ -18,6 +18,7 @@ die()  { echo "[reset] ERROR: $*"; exit 1; }
 BATCH=false
 LOG_FILE=""
 PROJECT_ROOT=""
+LOG_FILE_NEXT=""
 
 for arg in "$@"; do
     case "$arg" in
@@ -144,7 +145,6 @@ done
 # Scrub tokens from .env
 if [[ -f "$ENV_FILE" ]]; then
     sed -i '' 's/^GH_TOKEN=.*/GH_TOKEN=""/' "${ENV_FILE}" 2>/dev/null || true
-    sed -i '' 's/^DO_TOKEN=.*/DO_TOKEN=""/' "${ENV_FILE}" 2>/dev/null || true
 fi
 info "Phase 4: CLI — complete"
 
