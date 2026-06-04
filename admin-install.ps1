@@ -1,7 +1,11 @@
-# Install.ps1 - ShellPort Installer (Windows)
-# Same script, two audiences (the shortlinks are go-links pointing here):
+# admin-install.ps1 - ShellPort Admin Installer (Windows)
+# For company-owned DO interview stations. Downloads the admin release package,
+# which includes the admin/ overlay; that overlay is what marks the machine as a
+# managed DO station (ADMIN_MODE), enabling Recycle / End Event and the host scrub.
+# Shortlink (go-link points here):
 #   Admin (company machine):   irm https://do.co/shellport-admin-win | iex
-#   Candidate (remote BYOD):   irm https://do.co/shellport-windows   | iex
+# Candidates on their own machine should use Install.ps1 (the universal package),
+# which never installs the admin overlay.
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -14,8 +18,8 @@ function Write-Warn  { param([string]$Msg) Write-Warning "[shellport] WARN: $Msg
 function Stop-Fatal  { param([string]$Msg) Write-Error "[shellport] ERROR: $Msg"; exit 1 }
 
 Write-Host ""
-Write-Host "  ShellPort"
-Write-Host "  Ephemeral coding interview workstation"
+Write-Host "  ShellPort (Admin)"
+Write-Host "  Managed DO interview station"
 Write-Host ""
 
 # Prerequisites
@@ -38,11 +42,11 @@ if ($env:INTERVIEW_VERSION) {
     $Version = $releaseInfo.tag_name
     if (-not $Version) { Stop-Fatal "Could not detect latest release." }
 }
-Write-Info "Version: $Version"
+Write-Info "Version: $Version (admin)"
 
-# Download and extract
-$zipUrl = "https://github.com/$Repo/releases/download/$Version/shellport-$Version.zip"
-$zipPath = Join-Path $env:TEMP "shellport-$Version.zip"
+# Download and extract the admin package (includes the admin/ overlay)
+$zipUrl = "https://github.com/$Repo/releases/download/$Version/shellport-$Version-admin.zip"
+$zipPath = Join-Path $env:TEMP "shellport-$Version-admin.zip"
 
 Write-Info "Downloading..."
 Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
@@ -67,6 +71,7 @@ if ($env:SHELLPORT_QUESTIONS)     { $secrets += "QUESTIONS_URL=`"$env:SHELLPORT_
 if ($env:SHELLPORT_QUESTION_ROW)  { $secrets += "QUESTION_ROW=`"$env:SHELLPORT_QUESTION_ROW`"" }
 if ($env:SHELLPORT_QUESTION_TAB)  { $secrets += "QUESTION_TAB=`"$env:SHELLPORT_QUESTION_TAB`"" }
 if ($env:SHELLPORT_PROJECT)       { $secrets += "PROJECT_NAME=`"$env:SHELLPORT_PROJECT`"" }
+if ($env:SHELLPORT_LABEL)         { $secrets += "MACHINE_LABEL=`"$env:SHELLPORT_LABEL`"" }
 
 if ($secrets.Count -gt 0) {
     Add-Content $envFile ($secrets -join "`n")
@@ -89,6 +94,6 @@ Start-Process "http://localhost:3000"
 Write-Host ""
 Write-Info "ShellPort is running at http://localhost:3000"
 Write-Host ""
-Write-Info "When finished, click 'End Interview' in the browser,"
-Write-Info "or run: $InstallDir\Done.ps1"
+Write-Info "This is a managed station: Recycle and End Event are available"
+Write-Info "in the dashboard after unlocking with the machine's OS-user password."
 Write-Host ""

@@ -21,9 +21,6 @@ RUN curl -fsSL \
         | tar -xz -C /usr/local/bin \
  && chmod +x /usr/local/bin/doctl
 
-# code-server - powers the "Browser" IDE (VS Code in the browser, served from the container)
-RUN curl -fsSL https://code-server.dev/install.sh | sh
-
 USER vscode
 
 # Homebrew - installed as vscode user (devcontainer Feature has permission issues)
