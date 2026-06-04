@@ -15,8 +15,8 @@ Write-Info "Cleaning up interview environment..."
 # Stop the web server
 $pidFile = Join-Path $ScriptDir ".server_pid"
 if (Test-Path $pidFile) {
-    $pid = [int](Get-Content $pidFile)
-    Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+    $serverPid = [int](Get-Content $pidFile)
+    Stop-Process -Id $serverPid -Force -ErrorAction SilentlyContinue
     Write-Info "Server stopped."
 }
 
@@ -27,10 +27,9 @@ foreach ($proc in $processes) {
 }
 Start-Sleep -Seconds 1
 
-# Docker cleanup
+# Docker cleanup - scoped to ShellPort only; never a global prune.
 if (Get-Command docker -ErrorAction SilentlyContinue) {
     docker compose -f (Join-Path $ScriptDir "docker-compose.yml") down -v --remove-orphans 2>$null
-    docker system prune -af --volumes 2>$null
 }
 
 Write-Info "Removing $ScriptDir..."

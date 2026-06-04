@@ -5,16 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ShellPort</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600;700&family=Special+Gothic+Expanded+One&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #080c10; --surface: #0f1318; --surface2: #151b22; --surface3: #1c232c;
-  --border: #1e2730; --border-lit: #2a3542;
-  --text: #e2e8f0; --text2: #94a3b8; --muted: #64748b;
-  --accent: #06d6a0; --accent2: #0891b2; --accent-glow: #06d6a020;
-  --red: #f43f5e; --orange: #fb923c; --yellow: #fbbf24;
-  --mono: "JetBrains Mono", monospace;
-  --sans: "DM Sans", -apple-system, sans-serif;
+  /* DigitalOcean × Fuzzco — Deep (dark mode) theme */
+  --bg: #001515; --surface: #04201f; --surface2: #082826; --surface3: #0e302e;
+  --border: #143a37; --border-lit: #1d4a46;
+  --text: #F4F5F5; --text2: #C5CDCD; --muted: #6e8a88;
+  --accent: #1E7AD8; --accent2: #60A5AF; --accent-glow: #1E7AD833;
+  --red: #A54A34; --orange: #DAA549; --yellow: #DAA549; --green: #879B42;
+  --mono: "Geist Mono", ui-monospace, monospace;
+  --sans: "Geist", -apple-system, BlinkMacSystemFont, sans-serif;
+  --display: "Special Gothic Expanded One", var(--sans);
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
@@ -30,7 +33,7 @@ body::after{content:"";position:fixed;top:-40%;right:-20%;width:800px;height:800
 .logo{display:flex;align-items:center;gap:10px;margin-bottom:6px}
 .logo-icon{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center}
 .logo-icon svg{width:18px;height:18px;fill:var(--bg)}
-.logo h1{font-family:var(--mono);font-size:22px;font-weight:700;letter-spacing:-0.02em}
+.logo h1{font-family:var(--display);font-size:22px;font-weight:400;letter-spacing:-0.02em}
 .logo h1 span{color:var(--accent)}
 .tagline{font-size:13px;color:var(--muted);letter-spacing:0.02em}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px;margin-bottom:14px;animation:slideUp 0.4s ease both}
@@ -57,8 +60,8 @@ body::after{content:"";position:fixed;top:-40%;right:-20%;width:800px;height:800
 .ide-btn{position:relative;padding:14px 16px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--mono);font-size:12px;font-weight:500;cursor:pointer;transition:all 0.2s;text-align:left;overflow:hidden}
 .ide-btn:hover{border-color:var(--accent);background:var(--surface3);transform:translateY(-1px)}
 .ide-btn:active{transform:translateY(0)}
-.ide-btn.primary{border-color:var(--accent2);background:linear-gradient(135deg,#0891b215,#06d6a010)}
-.ide-btn.primary:hover{border-color:var(--accent);background:linear-gradient(135deg,#0891b225,#06d6a020)}
+.ide-btn.primary{border-color:var(--accent2);background:linear-gradient(135deg,#1E7AD81f,#60A5AF14)}
+.ide-btn.primary:hover{border-color:var(--accent);background:linear-gradient(135deg,#1E7AD82e,#60A5AF22)}
 .ide-btn small{display:block;color:var(--muted);font-family:var(--sans);font-size:11px;margin-top:3px;font-weight:400}
 .question-box{background:linear-gradient(135deg,var(--surface2),var(--surface3));border:1px solid var(--border-lit);border-radius:10px;padding:28px;font-size:14px;line-height:1.8;color:var(--text);position:relative;max-height:600px;overflow-y:auto}
 .question-box::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px 2px 0 0}
@@ -78,20 +81,22 @@ body::after{content:"";position:fixed;top:-40%;right:-20%;width:800px;height:800
 .question-box img{max-width:100%;height:auto;border-radius:6px;margin:8px 0}
 .question-box strong,.question-box b{color:var(--text);font-weight:600}
 .question-box hr{border:none;border-top:1px solid var(--border);margin:16px 0}
-.question-error{color:var(--orange);font-size:12px;padding:10px 14px;background:#fb923c08;border:1px solid #fb923c20;border-radius:8px}
+.question-error{color:var(--orange);font-size:12px;padding:10px 14px;background:#DAA54910;border:1px solid #DAA54930;border-radius:8px}
 .assigned-question{padding:14px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px}
 .assigned-question .aq-title{font-family:var(--mono);font-weight:600;color:var(--accent);font-size:14px;margin-bottom:4px}
 .assigned-question .aq-note{color:var(--muted);font-size:11px;margin-top:6px}
 .question-loading{color:var(--muted);font-style:italic}
 .question-note{font-size:12px;color:var(--muted);margin-top:14px;line-height:1.5}
 .timer-wrap{display:flex;align-items:baseline;gap:20px;padding:20px;border-radius:10px;background:var(--surface2);border:1px solid var(--border)}
-.timer-wrap.expired{border-color:var(--red);background:#f43f5e08}
+.timer-wrap.expired{border-color:var(--red);background:#A54A3410}
+.timer-wrap.idle{border-color:var(--orange);background:#DAA54910}
 .timer-big{font-family:var(--mono);font-size:42px;font-weight:700;color:var(--accent);letter-spacing:-0.03em;font-variant-numeric:tabular-nums}
 .timer-wrap.expired .timer-big{color:var(--red)}
+.timer-wrap.idle .timer-big{color:var(--orange)}
 .timer-meta{font-size:12px;color:var(--muted);line-height:2}
 .timer-meta span{font-family:var(--mono)}
 .timer-meta b{color:var(--text2);font-weight:500}
-.timer-alert{margin-top:10px;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:500;background:#fb923c10;border:1px solid #fb923c30;color:var(--orange)}
+.timer-alert{margin-top:10px;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:500;background:#DAA54910;border:1px solid #DAA54930;color:var(--orange)}
 .config-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)}
 .config-row:last-child{border-bottom:none}
 .config-label{font-size:13px}
@@ -115,15 +120,15 @@ body::after{content:"";position:fixed;top:-40%;right:-20%;width:800px;height:800
 .actions{display:flex;gap:10px}
 .btn{font-family:var(--mono);font-size:12px;font-weight:500;padding:10px 20px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;transition:all 0.2s}
 .btn:hover{border-color:var(--text2);background:var(--surface3)}
-.btn.danger{border-color:#f43f5e40;color:var(--red)}
-.btn.danger:hover{background:#f43f5e10;border-color:var(--red)}
+.btn.danger{border-color:#A54A3460;color:var(--red)}
+.btn.danger:hover{background:#A54A3418;border-color:var(--red)}
 .btn:disabled{opacity:0.3;cursor:not-allowed;pointer-events:none}
-.issue{background:#f43f5e08;border:1px solid #f43f5e20;border-radius:8px;padding:12px 14px;font-size:13px;margin-top:10px;color:var(--red)}
+.issue{background:#A54A3414;border:1px solid #A54A3433;border-radius:8px;padding:12px 14px;font-size:13px;margin-top:10px;color:var(--red)}
 .done-wrap{text-align:center;padding:20px 0}
 .done-wrap h2{font-size:16px!important;color:var(--text)!important;text-transform:none!important;letter-spacing:normal!important}
 .done-wrap p{color:var(--muted);font-size:14px;margin-top:8px}
 details summary{font-family:var(--mono);font-size:11px;color:var(--muted);cursor:pointer;padding:8px 0}
-.log-box{background:#050709;border:1px solid var(--border);border-radius:8px;padding:12px;max-height:200px;overflow-y:auto;font-family:var(--mono);font-size:11px;line-height:1.5;color:#475569}
+.log-box{background:#000d0d;border:1px solid var(--border);border-radius:8px;padding:12px;max-height:200px;overflow-y:auto;font-family:var(--mono);font-size:11px;line-height:1.5;color:var(--muted)}
 .note{font-size:12px;color:var(--muted);margin-top:14px;line-height:1.6}
 .hidden{display:none!important}
 </style>
@@ -424,10 +429,11 @@ function renderIDEs(){
     g.innerHTML=`<p style="color:var(--muted);font-size:13px;">No supported IDE detected. Install VS Code, Cursor, or Windsurf.</p>`;
     return;
   }
+  const subtitle={local:"Open in Dev Container","code-server":"VS Code in your browser",url:"Open in browser",instruction:"Setup instructions"};
   S.ides.forEach(ide=>{
     const b=document.createElement("button");
     b.className="ide-btn";
-    b.innerHTML=`${ide.name}<small>Open in Dev Container</small>`;
+    b.innerHTML=`${esc(ide.name)}<small>${esc(ide.note||subtitle[ide.kind]||"")}</small>`;
     b.onclick=()=>launchIDE(ide.name);g.appendChild(b);
   });
 }
@@ -443,6 +449,7 @@ function renderTimer(){
   $("t-active").textContent=fmt(t.active);$("t-idle").textContent=fmt(t.idle);
   $("t-limit").textContent=fmt(t.limitSecs);$("t-action").textContent=t.action;
   $("timer-wrap").classList.toggle("expired",!!t.expired);
+  $("timer-wrap").classList.toggle("idle",!!t.idleNow);
 }
 function onExpired(msg){$("timer-alert").textContent=msg.message;$("timer-alert").classList.remove("hidden")}
 
@@ -451,7 +458,6 @@ function renderAdmin(){
   const defs=[
     {key:"ENABLE_TIMER",label:"Session Timer",desc:"Track active/idle time with enforcement options"},
     {key:"ENABLE_TELEMETRY",label:"Telemetry",desc:"Export AI usage, shell history, and Git activity"},
-    {key:"ENABLE_ARCHIVE",label:"Archive",desc:"Zip workspace to DigitalOcean Spaces on cleanup"},
   ];
   if(!f.children.length){
     defs.forEach(d=>{
@@ -491,16 +497,39 @@ function renderAdmin(){
   }
 }
 
+// Admin auth: privileged calls (config/reroll/reset) require a short-lived
+// bearer token minted by a native OS admin challenge.
+let adminToken=null;
+async function ensureAuth(){
+  if(adminToken)return adminToken;
+  const r=await fetch("/api/auth",{method:"POST"});
+  if(!r.ok)throw new Error("Admin authentication required");
+  adminToken=(await r.json()).token;return adminToken;
+}
+async function authedFetch(url,opts={}){
+  let t=await ensureAuth();
+  opts.headers={...(opts.headers||{}),"Authorization":"Bearer "+t};
+  let res=await fetch(url,opts);
+  if(res.status===401){adminToken=null;t=await ensureAuth();opts.headers.Authorization="Bearer "+t;res=await fetch(url,opts);}
+  return res;
+}
+
 async function toggleFeature(el,key){
   const on=el.classList.toggle("on");S.config={...S.config,[key]:on?"true":"false"};renderAdmin();
-  await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(S.config)});
+  try{
+    await authedFetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(S.config)});
+  }catch(_){
+    el.classList.toggle("on");S.config={...S.config,[key]:on?"false":"true"};renderAdmin();
+  }
 }
 
 async function saveTimerConfig(){
   const cfg={...S.config,TIMEOUT_ACTION:$("cfg-action").value,
     TIME_LIMIT_MINUTES:$("cfg-limit").value,INACTIVITY_TIMEOUT_MINUTES:$("cfg-inactivity").value};
   S.config=cfg;
-  const res=await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(cfg)});
+  let res;
+  try{res=await authedFetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(cfg)});}
+  catch(_){return;}
   const d=await res.json();
   if(d.saved){const b=document.querySelector(".save-btn");b.textContent="Saved";b.style.borderColor="var(--accent)";
     setTimeout(()=>{b.textContent="Save";b.style.borderColor=""},1500)}
@@ -518,9 +547,11 @@ function renderTelemetry(data){
 }
 
 async function rerollQuestion(){
+  try{
+    await authedFetch("/api/reroll",{method:"POST"});
+  }catch(_){return;}
   S.questionLoading=true;S.question=null;S.questionHtml=null;
   renderQuestion();renderAdmin();
-  await fetch("/api/reroll",{method:"POST"});
 }
 
 async function toggleQuestionVisibility(){
@@ -545,17 +576,31 @@ async function endInterview(){
 
 async function adminReset(){
   if(!confirm("Run full host teardown? This will:\n\n- Wipe all browsers and cached logins\n- Purge keychain/credential entries\n- Scrub IDE state and shell history\n- Destroy and rebuild the container\n\nYou will be prompted for your admin password."))return;
+  let res;
+  try{res=await authedFetch("/api/reset",{method:"POST"});}
+  catch(_){return;}
+  if(!res.ok)return;
   $("btn-end").disabled=true;$("btn-reset").disabled=true;
   $("progress-steps").innerHTML="";
   $("ide-buttons").innerHTML="";
   S.question=null;S.questionHtml=null;S.questionLoading=true;S.questionVisible=true;
   currentPct=0;setProgress(0);
   renderQuestion();
-  await fetch("/api/reset",{method:"POST"});
 }
 
 connect();
 fetch("/api/state").then(r=>r.json()).then(s=>{S=s;render()});
+
+// Activity heartbeat: flag real interaction, then report at most once every 15s
+// so the server can distinguish active time from idle time.
+let activitySeen=false;
+["mousemove","keydown","click","scroll","touchstart"].forEach(ev=>
+  window.addEventListener(ev,()=>{activitySeen=true},{passive:true}));
+setInterval(()=>{
+  if(!activitySeen)return;
+  activitySeen=false;
+  fetch("/api/activity",{method:"POST"}).catch(()=>{});
+},15000);
 </script>
 </body>
 </html>

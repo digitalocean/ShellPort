@@ -6,16 +6,30 @@ Ephemeral coding interview workstation. Any computer. One command to install. A 
 
 ## Install
 
-**macOS / Linux:**
+Two entry points, same installer. Admins set up company-owned machines; candidates set up their own machine for a remote interview.
+
+**Admin (company-owned machine):**
 
 ```bash
-curl -fsSL https://do.co/coding-interview-setup | bash
+# macOS / Linux
+curl -fsSL https://do.co/shellport-admin-mac | bash
 ```
 
-**Windows (PowerShell):**
+```powershell
+# Windows (PowerShell)
+irm https://do.co/shellport-admin-win | iex
+```
+
+**Candidate (remote BYOD):**
+
+```bash
+# macOS / Linux
+curl -fsSL https://do.co/shellport-macos | bash
+```
 
 ```powershell
-irm https://do.co/coding-interview-setup-win | iex
+# Windows (PowerShell)
+irm https://do.co/shellport-windows | iex
 ```
 
 Prerequisites: Docker (running) and Node.js. The installer handles everything else.
@@ -34,17 +48,17 @@ The dashboard shows each step as it completes: Docker check, container build, co
 
 **When ready:**
 
-IDE launch buttons appear: VS Code, Cursor, Windsurf, Browser (code-server), DevPod, and GitHub Codespaces. The candidate clicks one. The "Browser" button opens a full VS Code environment in the browser with no local IDE required.
+IDE launch buttons appear for every editor detected on the machine — VS Code, VS Code Insiders, Cursor, Windsurf, and VSCodium — plus always-available web options: Browser (code-server), github.dev, GitHub Codespaces, and DevPod. The candidate clicks one. The "Browser" button opens a full VS Code environment in the browser with no local IDE required.
 
 **During cleanup:**
 
-The dashboard shows each cleanup step: archive (if enabled), telemetry export (if enabled), IDE kill, Docker wipe, and post-cleanup verification. If any residue is detected (new credentials, leftover files), the dashboard reports exactly what was found.
+The dashboard shows each cleanup step: telemetry export (if enabled), IDE kill, container teardown (ShellPort's own container and volume only — never a host-wide Docker prune), and post-cleanup verification. If any residue is detected (new credentials, leftover files), the dashboard reports exactly what was found.
 
 ---
 
 ## Code
 
-The IDE opens inside an isolated container with everything pre-installed: Go, Python, Java, Node.js, C/C++, TypeScript, GitHub Copilot, Claude Code, GitHub CLI, doctl, Homebrew, neovim, jq, yq, s3cmd. All tools are the latest version at install time.
+The IDE opens inside an isolated container with everything pre-installed: Go, Python, Java, Node.js, C/C++, TypeScript, GitHub Copilot, Claude Code, GitHub CLI, doctl, Homebrew, neovim, jq, yq. All tools are the latest version at install time.
 
 A terminal summary prints every version when the container starts. All work must be saved inside `/workspaces`.
 
@@ -52,13 +66,22 @@ A terminal summary prints every version when the container starts. All work must
 
 ## Done
 
-Click "End Interview" in the dashboard. Or run the cleanup script directly:
+The candidate clicks "End Interview" in the dashboard, or runs the cleanup script directly:
 
 **macOS / Linux:** `~/shellport/done.sh`
 
 **Windows:** `~\shellport\Done.ps1`
 
-This stops the server, kills IDE processes, destroys the container and Docker volume, prunes images, and deletes the entire project directory.
+This stops the server, kills IDE processes, tears down ShellPort's own container and Docker volume, and deletes the project directory. It is scoped to ShellPort — it does not run a host-wide Docker prune and does not touch unrelated images, volumes, browsers, or credentials.
+
+### Recycle vs. End Event (operator)
+
+Two operator actions, both gated behind OS-level admin authentication (macOS/Linux `sudo`/`pkexec`, Windows UAC) so a candidate session can't reach them:
+
+- **Recycle** (DO interview station): scrub the host and load a fresh question for the next candidate, without rebuilding the machine.
+- **End Event**: tear down the workstation. On a DO station it can power the machine off after confirmation; on a BYOD machine it returns the command to fully uninstall ShellPort.
+
+ShellPort detects its machine type. On a candidate's own machine (BYOD) it only ever removes its own footprint — it never performs the aggressive host scrub reserved for dedicated DO stations.
 
 ---
 
@@ -98,6 +121,8 @@ IDE settings block GitHub token injection, Git credential forwarding, SSH agent 
 
 The pre-install snapshot captures the host state (Desktop files, Downloads, credentials, SSH keys, Git config) before setup. On cleanup, the dashboard verifies nothing was left behind.
 
+Interviewer-only surfaces — Settings, telemetry, Recycle, and End Event — require OS-level admin authentication; a candidate session cannot view or change them. Before each interview ShellPort validates the host is clean (no leftover container, session files, or — on DO stations — credential residue) and holds setup until any residue is cleared.
+
 ---
 
 ## Optional Features
@@ -106,10 +131,9 @@ All features are off by default. Enable via `.env` or by passing a config URL
 
 | Feature | .env variable | What it does |
 |---|---|---|
-| Timer | ENABLE_TIMER=true | Live countdown in dashboard. On expiry: NOTIFY, LOCK, or WIPE. |
-| Archive | ENABLE_ARCHIVE=true | Zips /workspaces to DigitalOcean Spaces before cleanup. |
+| Timer | ENABLE_TIMER=true | Live active/idle countdown in dashboard. On expiry: NOTIFY, LOCK, or WIPE. Idle is defined by INACTIVITY_TIMEOUT_MINUTES. |
 | Telemetry | ENABLE_TELEMETRY=true | Exports shell history, AI usage, Git activity. Stats shown in dashboard. |
-| Questions | ENABLE_QUESTIONS=true | Fetches a question from do.co/coding-interview-questions during setup. |
+| Questions | QUESTIONS_URL=... | Loads an interview question during setup from the given URL (Google Sheet or doc), also offered as a downloadable PDF. Skipped when unset. QUESTION_ROW pins a specific row; QUESTION_WEBHOOK posts the chosen question. |
 
 ---
 
@@ -158,7 +182,8 @@ git push origin v1.0.0
 |---|---|---|
 | shellport-v1.0.0.tar.gz | Everyone (macOS/Linux) | Container + app + install + done |
 | shellport-v1.0.0.zip | Everyone (Windows) | Same |
-| shellport-v1.0.0-admin.tar.gz | IT only | Above + admin/ reset scripts |
+| shellport-v1.0.0-admin.tar.gz | IT only (macOS/Linux) | Above + admin/ reset scripts |
+| shellport-v1.0.0-admin.zip | IT only (Windows) | Same |
 | install.sh | Standalone | macOS/Linux entry point |
 | Install.ps1 | Standalone | Windows entry point |
 
@@ -178,9 +203,10 @@ To clean up manually:
 
 ```bash
 docker compose down -v --remove-orphans
-docker system prune -af --volumes
 rm -rf ~/shellport
 ```
+
+`docker compose down -v` removes only ShellPort's own container and volume. If you also want to reclaim unused Docker space and have no other Docker projects, you can run `docker system prune -af --volumes` — but note that is host-wide. ShellPort's own scripts never run it.
 
 ---
 

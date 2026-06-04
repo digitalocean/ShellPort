@@ -1,6 +1,7 @@
 # Install.ps1 - ShellPort Installer (Windows)
-# Basic:
-#   irm https://do.co/shellport-setup-win | iex
+# Same script, two audiences (the shortlinks are go-links pointing here):
+#   Admin (company machine):   irm https://do.co/shellport-admin-win | iex
+#   Candidate (remote BYOD):   irm https://do.co/shellport-windows   | iex
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -64,9 +65,6 @@ $secrets = @()
 if ($env:SHELLPORT_WEBHOOK)       { $secrets += "QUESTION_WEBHOOK=`"$env:SHELLPORT_WEBHOOK`"" }
 if ($env:SHELLPORT_QUESTIONS)     { $secrets += "QUESTIONS_URL=`"$env:SHELLPORT_QUESTIONS`"" }
 if ($env:SHELLPORT_QUESTION_ROW)  { $secrets += "QUESTION_ROW=`"$env:SHELLPORT_QUESTION_ROW`"" }
-if ($env:SHELLPORT_DO_TOKEN)      { $secrets += "DO_TOKEN=`"$env:SHELLPORT_DO_TOKEN`"" }
-if ($env:SHELLPORT_SPACES_BUCKET) { $secrets += "SPACES_BUCKET=`"$env:SHELLPORT_SPACES_BUCKET`"" }
-if ($env:SHELLPORT_SPACES_REGION) { $secrets += "SPACES_REGION=`"$env:SHELLPORT_SPACES_REGION`"" }
 if ($env:SHELLPORT_PROJECT)       { $secrets += "PROJECT_NAME=`"$env:SHELLPORT_PROJECT`"" }
 
 if ($secrets.Count -gt 0) {
