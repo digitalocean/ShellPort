@@ -64,7 +64,6 @@ $EnvFile = Join-Path $ProjectRoot ".env"
 # Feature flag defaults (overridden by .env if present)
 $ENABLE_TIMER = "false"
 $TIMEOUT_ACTION = "NOTIFY"
-$ENABLE_ARCHIVE = "false"
 $ENABLE_TELEMETRY = "false"
 $ENABLE_QUESTIONS = "false"
 $ENABLE_MDM_HANDOFF = "false"
@@ -95,38 +94,6 @@ function Notify-Phase {
     if ($ENABLE_PROGRESS_UI -eq "true") {
         [System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null
         [System.Windows.Forms.MessageBox]::Show($Msg, 'Station Reset', 'OK', 'Information') | Out-Null
-    }
-}
-
-# Phase 0: Archive (feature)
-if ($ENABLE_ARCHIVE -eq "true") {
-    Write-Info "Phase 0: Archive"
-    Notify-Phase "Archiving candidate workspace..."
-
-    if ($DO_TOKEN -and $SPACES_BUCKET -and $SPACES_REGION) {
-        $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-        $candName = "unknown"
-        if (Test-Path (Join-Path $TimerDir "candidate")) {
-            $candName = Get-Content (Join-Path $TimerDir "candidate")
-        } elseif (Test-Path $SnapshotFile) {
-            $candLine = Get-Content $SnapshotFile | Where-Object { $_ -match '^CANDIDATE=' } | Select-Object -First 1
-            if ($candLine) { $candName = $candLine -replace '^CANDIDATE=', '' }
-        }
-        $projLabel = if ($PROJECT_NAME) { $PROJECT_NAME } else { "interview" }
-        $archiveName = "${projLabel}-${candName}-${timestamp}.zip"
-
-        $archiveCmd = "cd /workspaces && zip -r /tmp/$archiveName . && s3cmd --access_key=`"$DO_TOKEN`" --secret_key=`"$DO_TOKEN`" --host=`"$SPACES_REGION.digitaloceanspaces.com`" --host-bucket=`"%(bucket)s.$SPACES_REGION.digitaloceanspaces.com`" --no-encrypt put /tmp/$archiveName s3://$SPACES_BUCKET/$archiveName && rm -f /tmp/$archiveName"
-
-        $result = docker compose exec -T interview-env bash -c $archiveCmd 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            Write-Info "Archived: s3://${SPACES_BUCKET}/${archiveName}"
-        } else {
-            Write-Warn "Archive failed."
-            $ans = Read-Host "[reset] Continue with wipe? (Y/n)"
-            if ($ans -match "^[nN]") { Write-Warn "Halted by operator."; exit 1 }
-        }
-    } else {
-        Write-Warn "Archive enabled but DO_TOKEN, SPACES_BUCKET, or SPACES_REGION missing. Skipped."
     }
 }
 
@@ -376,16 +343,13 @@ foreach ($dir in $dirsToRemove) {
 }
 
 if (Test-Path $EnvFile) {
-    (Get-Content $EnvFile) -replace '^GH_TOKEN=.*', 'GH_TOKEN=""' -replace '^DO_TOKEN=.*', 'DO_TOKEN=""' | Set-Content $EnvFile
+    (Get-Content $EnvFile) -replace '^GH_TOKEN=.*', 'GH_TOKEN=""' | Set-Content $EnvFile
 }
 $env:GH_TOKEN = ""
-$env:DO_TOKEN = ""
 
-$gitDir = git -C $ProjectRoot rev-parse --git-dir 2>$null
-if ($LASTEXITCODE -eq 0) {
-    git -C $ProjectRoot checkout . 2>$null
-    git -C $ProjectRoot clean -fd 2>$null
-}
+# Candidate work lives in the Docker volume (destroyed via `docker compose down -v`),
+# never in this repo — so no `git checkout .` / `git clean -fd` here. Those would
+# silently discard the operator's own uncommitted changes in the install directory.
 
 # Phase 5: Credential purge
 Write-Info "Phase 5: Credential purge"

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # install.sh - ShellPort Installer (macOS / Linux)
-# Basic (uses baked defaults, no secrets):
-#   curl -fsSL https://do.co/shellport-setup | bash
+# Same script, two audiences (the shortlinks are go-links pointing here):
+#   Admin (company machine):   curl -fsSL https://do.co/shellport-admin-mac | bash
+#   Candidate (remote BYOD):   curl -fsSL https://do.co/shellport-macos     | bash
 
 set -euo pipefail
 
@@ -57,9 +58,6 @@ fi
     [[ -n "${SHELLPORT_WEBHOOK:-}" ]]       && echo "QUESTION_WEBHOOK=\"${SHELLPORT_WEBHOOK}\""
     [[ -n "${SHELLPORT_QUESTIONS:-}" ]]     && echo "QUESTIONS_URL=\"${SHELLPORT_QUESTIONS}\""
     [[ -n "${SHELLPORT_QUESTION_ROW:-}" ]]  && echo "QUESTION_ROW=\"${SHELLPORT_QUESTION_ROW}\""
-    [[ -n "${SHELLPORT_DO_TOKEN:-}" ]]      && echo "DO_TOKEN=\"${SHELLPORT_DO_TOKEN}\""
-    [[ -n "${SHELLPORT_SPACES_BUCKET:-}" ]] && echo "SPACES_BUCKET=\"${SHELLPORT_SPACES_BUCKET}\""
-    [[ -n "${SHELLPORT_SPACES_REGION:-}" ]] && echo "SPACES_REGION=\"${SHELLPORT_SPACES_REGION}\""
     [[ -n "${SHELLPORT_PROJECT:-}" ]]       && echo "PROJECT_NAME=\"${SHELLPORT_PROJECT}\""
 } >> "${ENV_FILE}"
 

@@ -27,10 +27,9 @@ for app in "Visual Studio Code" "Code" "Cursor" "Cursor Helper" "Windsurf" "Wind
 done
 sleep 1
 
-# Docker cleanup
+# Docker cleanup - scoped to ShellPort only; never a global prune.
 if command -v docker &>/dev/null; then
     docker compose -f "${SCRIPT_DIR}/docker-compose.yml" down -v --remove-orphans 2>/dev/null || true
-    docker system prune -af --volumes 2>/dev/null || true
 fi
 
 info "Removing ${SCRIPT_DIR}..."
