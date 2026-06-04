@@ -99,7 +99,7 @@ let S={status:"initializing",mode:"candidate",adminAvailable:false,adminMode:fal
   questionVisible:true,questionPdf:null,timer:null,eventComplete:null,validationLocked:false,error:null,
   fixes:{trouble:[],manual:[],emergency:null}};
 const ui={view:'auto',tab:'settings',unlocked:false,localComplete:false,help:null,logView:false};
-let adminToken=null, sessionTheme=null, adminCfg=null;
+let adminToken=null, sessionTheme=null, adminCfg=null, pendingAfterUnlock=null;
 let prog={pct:0,op:'',phase:'setup'};
 
 // ── Appearance ───────────────────────────────────────────────────────────────
@@ -229,7 +229,7 @@ function scrEventComplete(){
   let h='<div class="center"><div class="check">✓</div><h1>Interview event <span class="it">complete</span>.</h1>'
     +'<p class="lede" style="text-align:center;margin:18px auto 0">'+esc(e.message||'This machine is clean.')+'</p>';
   if(e.uninstall) h+='<div class="qc" style="margin:22px auto 0;text-align:left;max-width:440px">'+esc(e.uninstall)+'</div>';
-  if(e.canShutdown) h+='<div class="actions" style="justify-content:center;border-top:none"><button class="alink d" data-go="shutdown">Shut down machine →</button></div>';
+  if(e.canShutdown) h+='<div class="actions" style="justify-content:center;border-top:none"><button class="alink" data-go="newevent">Start a new event →</button><button class="alink d" data-go="shutdown">Shut down machine →</button></div>';
   return h+'</div>';
 }
 
@@ -398,10 +398,10 @@ function render(){
 // ── Event wiring ─────────────────────────────────────────────────────────────
 $('rsp').addEventListener('click',e=>{
   const btn=e.target.closest('[data-tab],[data-act]');if(!btn)return;
-  if(btn.dataset.tab){ui.tab=btn.dataset.tab;render();return}
+  if(btn.dataset.tab){ui.tab=btn.dataset.tab;ui.help=null;ui.logView=false;render();return}
   const a=btn.dataset.act;
   if(a==='theme'){sessionTheme=resolveTheme()==='dark'?'light':'dark';render()}
-  else if(a==='lock'){ui.view='admin';ui.tab='settings';render()}
+  else if(a==='lock'){ui.view='admin';ui.tab='settings';ui.help=null;render()}
   else if(a==='exit'){ui.view='auto';ui.help=null;render()}
   else if(a==='help'){ui.help='troubleshoot';render()}
 });
@@ -435,6 +435,7 @@ function go(dest){
     case'end':ui.localComplete=true;render();break;
     case'remove':endInterview();break;
     case'reset':adminReset();break;
+    case'newevent':adminNewEvent();break;
     case'endevent':adminEndEvent();break;
     case'shutdown':adminShutdown();break;
     case'reroll':rerollQuestion();break;
@@ -457,7 +458,7 @@ async function unlock(){
   try{
     const r=await fetch('/api/admin-unlock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
     const d=await r.json();
-    if(r.ok&&d.token){adminToken=d.token;ui.unlocked=true;render();loadAdminCfg()}
+    if(r.ok&&d.token){adminToken=d.token;ui.unlocked=true;render();loadAdminCfg();if(pendingAfterUnlock){const f=pendingAfterUnlock;pendingAfterUnlock=null;f()}}
     else if(err)err.textContent=d.error||'Incorrect password.';
   }catch(_){if(err)err.textContent='Unlock failed.'}
 }
@@ -542,7 +543,16 @@ async function adminEndEvent(){
   if(!confirm('End the interview event and tear down this workstation?'))return;
   try{await authedFetch('/api/end-event',{method:'POST'});ui.tab='reset';render()}catch(_){}
 }
+// Reuse from the event-complete screen. A fresh page reload drops the in-memory
+// token, so prompt for the admin unlock first, then resume the chosen action.
+function gate(fn){if(adminToken)return false;pendingAfterUnlock=fn;ui.view='admin';ui.tab='settings';render();return true}
+async function adminNewEvent(){
+  if(gate(adminNewEvent))return;
+  if(!confirm('Start a new interview event? This scrubs the host and rebuilds with a fresh question.'))return;
+  try{await authedFetch('/api/reset',{method:'POST'});ui.view='admin';ui.tab='reset';render()}catch(_){}
+}
 async function adminShutdown(){
+  if(gate(adminShutdown))return;
   if(!confirm('Shut down this machine now?'))return;
   try{await authedFetch('/api/shutdown',{method:'POST'})}catch(_){}
 }

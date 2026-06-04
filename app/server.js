@@ -654,12 +654,21 @@ function uninstallCommand() {
     : `rm -rf "${ROOT}"`;
 }
 
-// User-session shutdown (DO end-event) — no admin re-prompt.
-function shutdownMachine() {
+// User-session shutdown (DO end-event). Tries the no-prompt path first, then a
+// privileged fallback, and logs why each attempt failed so a silent no-op on
+// macOS (System Events needs Automation permission) is diagnosable.
+async function shutdownMachine() {
   broadcast({ type: "log", line: "[shutdown] Powering off…" });
-  if (IS_WIN) run(`Stop-Computer -Force`).catch(() => {});
-  else if (process.platform === "darwin") run(`osascript -e 'tell application "System Events" to shut down'`).catch(() => {});
-  else run(`systemctl poweroff 2>/dev/null || shutdown -h now`).catch(() => {});
+  const cmds = IS_WIN
+    ? [`Stop-Computer -Force`]
+    : process.platform === "darwin"
+      ? [`osascript -e 'tell application "System Events" to shut down'`, `shutdown -h now`]
+      : [`systemctl poweroff`, `shutdown -h now`];
+  for (const cmd of cmds) {
+    try { await run(cmd); return; }
+    catch (e) { broadcast({ type: "log", line: `[shutdown] "${cmd}" failed: ${e.message}` }); }
+  }
+  broadcast({ type: "log", line: "[shutdown] Could not power off automatically — shut down manually." });
 }
 
 // ── Pre-interview validation ─────────────────────────────────────────────────
