@@ -1,606 +1,624 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-t="dark" data-f="sans">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ShellPort</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600;700&family=Special+Gothic+Expanded+One&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500&family=Geist+Mono:wght@400;500&family=Space+Grotesk:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,400;1,9..144,400&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css" rel="stylesheet">
 <style>
-:root {
-  /* DigitalOcean × Fuzzco — Deep (dark mode) theme */
-  --bg: #001515; --surface: #04201f; --surface2: #082826; --surface3: #0e302e;
-  --border: #143a37; --border-lit: #1d4a46;
-  --text: #F4F5F5; --text2: #C5CDCD; --muted: #6e8a88;
-  --accent: #1E7AD8; --accent2: #60A5AF; --accent-glow: #1E7AD833;
-  --red: #A54A34; --orange: #DAA549; --yellow: #DAA549; --green: #879B42;
-  --mono: "Geist Mono", ui-monospace, monospace;
-  --sans: "Geist", -apple-system, BlinkMacSystemFont, sans-serif;
-  --display: "Special Gothic Expanded One", var(--sans);
-}
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
-::selection{background:var(--accent);color:var(--bg)}
-body::before{content:"";position:fixed;inset:0;background:
-  linear-gradient(var(--border) 1px,transparent 1px),
-  linear-gradient(90deg,var(--border) 1px,transparent 1px);
-  background-size:60px 60px;opacity:0.12;pointer-events:none;z-index:0}
-body::after{content:"";position:fixed;top:-40%;right:-20%;width:800px;height:800px;
-  background:radial-gradient(circle,var(--accent-glow) 0%,transparent 70%);pointer-events:none;z-index:0}
-.page{position:relative;z-index:1;max-width:780px;margin:0 auto;padding:48px 24px 80px}
-.header{margin-bottom:40px}
-.logo{display:flex;align-items:center;gap:10px;margin-bottom:6px}
-.logo-icon{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center}
-.logo-icon svg{width:18px;height:18px;fill:var(--bg)}
-.logo h1{font-family:var(--display);font-size:22px;font-weight:400;letter-spacing:-0.02em}
-.logo h1 span{color:var(--accent)}
-.tagline{font-size:13px;color:var(--muted);letter-spacing:0.02em}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px;margin-bottom:14px;animation:slideUp 0.4s ease both}
-.card+.card{animation-delay:0.06s}
-.card h2{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:18px}
-.card h3{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin:20px 0 12px}
-@keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
-.progress-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
-.progress-label{font-family:var(--mono);font-size:12px;color:var(--text2)}
-.progress-pct{font-family:var(--mono);font-size:12px;color:var(--accent);font-weight:600}
-.progress-track{height:6px;background:var(--surface3);border-radius:3px;overflow:hidden}
-.progress-fill{height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:3px;transition:width 0.6s cubic-bezier(.4,0,.2,1);position:relative}
-.progress-fill::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent 40%,rgba(255,255,255,0.15) 50%,transparent 60%);animation:shimmer 2s infinite}
-@keyframes shimmer{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
-.steps{margin-top:16px}
-.step{display:flex;align-items:center;gap:10px;padding:5px 0;font-size:13px;color:var(--muted);transition:color 0.3s}
-.step.done{color:var(--text2)}.step.running{color:var(--accent)}.step.error{color:var(--red)}
-.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:var(--surface3);transition:all 0.3s}
-.step.done .dot{background:var(--accent);box-shadow:0 0 6px var(--accent-glow)}
-.step.running .dot{background:var(--accent);animation:blink 1s infinite}
-.step.error .dot{background:var(--red)}.step.warning .dot{background:var(--orange)}.step.skipped .dot{background:var(--muted)}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
-.ide-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
-.ide-btn{position:relative;padding:14px 16px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--mono);font-size:12px;font-weight:500;cursor:pointer;transition:all 0.2s;text-align:left;overflow:hidden}
-.ide-btn:hover{border-color:var(--accent);background:var(--surface3);transform:translateY(-1px)}
-.ide-btn:active{transform:translateY(0)}
-.ide-btn.primary{border-color:var(--accent2);background:linear-gradient(135deg,#1E7AD81f,#60A5AF14)}
-.ide-btn.primary:hover{border-color:var(--accent);background:linear-gradient(135deg,#1E7AD82e,#60A5AF22)}
-.ide-btn small{display:block;color:var(--muted);font-family:var(--sans);font-size:11px;margin-top:3px;font-weight:400}
-.question-box{background:linear-gradient(135deg,var(--surface2),var(--surface3));border:1px solid var(--border-lit);border-radius:10px;padding:28px;font-size:14px;line-height:1.8;color:var(--text);position:relative;max-height:600px;overflow-y:auto}
-.question-box::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px 2px 0 0}
-.question-box h1,.question-box h2,.question-box h3,.question-box h4,.question-box h5{font-family:var(--mono);color:var(--accent);margin:18px 0 8px;line-height:1.4}
-.question-box h1{font-size:18px}.question-box h2{font-size:16px}.question-box h3{font-size:14px}.question-box h4{font-size:13px}
-.question-box h1:first-child,.question-box h2:first-child,.question-box h3:first-child,.question-box h4:first-child{margin-top:0}
-.question-box p{margin:8px 0}
-.question-box ul,.question-box ol{margin:8px 0 8px 24px}
-.question-box li{margin:4px 0}
-.question-box code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:2px 6px;border-radius:4px;color:var(--accent)}
-.question-box pre{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin:12px 0;overflow-x:auto}
-.question-box pre code{background:none;padding:0;font-size:12px;color:var(--text2)}
-.question-box a{color:var(--accent2);text-decoration:underline}
-.question-box table{border-collapse:collapse;width:100%;margin:12px 0}
-.question-box td,.question-box th{border:1px solid var(--border);padding:8px 10px;font-size:13px;text-align:left}
-.question-box th{background:var(--surface3);font-weight:600}
-.question-box img{max-width:100%;height:auto;border-radius:6px;margin:8px 0}
-.question-box strong,.question-box b{color:var(--text);font-weight:600}
-.question-box hr{border:none;border-top:1px solid var(--border);margin:16px 0}
-.question-error{color:var(--orange);font-size:12px;padding:10px 14px;background:#DAA54910;border:1px solid #DAA54930;border-radius:8px}
-.assigned-question{padding:14px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px}
-.assigned-question .aq-title{font-family:var(--mono);font-weight:600;color:var(--accent);font-size:14px;margin-bottom:4px}
-.assigned-question .aq-note{color:var(--muted);font-size:11px;margin-top:6px}
-.question-loading{color:var(--muted);font-style:italic}
-.question-note{font-size:12px;color:var(--muted);margin-top:14px;line-height:1.5}
-.timer-wrap{display:flex;align-items:baseline;gap:20px;padding:20px;border-radius:10px;background:var(--surface2);border:1px solid var(--border)}
-.timer-wrap.expired{border-color:var(--red);background:#A54A3410}
-.timer-wrap.idle{border-color:var(--orange);background:#DAA54910}
-.timer-big{font-family:var(--mono);font-size:42px;font-weight:700;color:var(--accent);letter-spacing:-0.03em;font-variant-numeric:tabular-nums}
-.timer-wrap.expired .timer-big{color:var(--red)}
-.timer-wrap.idle .timer-big{color:var(--orange)}
-.timer-meta{font-size:12px;color:var(--muted);line-height:2}
-.timer-meta span{font-family:var(--mono)}
-.timer-meta b{color:var(--text2);font-weight:500}
-.timer-alert{margin-top:10px;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:500;background:#DAA54910;border:1px solid #DAA54930;color:var(--orange)}
-.config-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)}
-.config-row:last-child{border-bottom:none}
-.config-label{font-size:13px}
-.config-label small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
-.toggle{width:40px;height:22px;border-radius:11px;background:var(--surface3);cursor:pointer;position:relative;transition:background 0.25s;flex-shrink:0;border:1px solid var(--border)}
-.toggle.on{background:var(--accent);border-color:var(--accent)}
-.toggle::after{content:"";width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:transform 0.25s cubic-bezier(.4,0,.2,1)}
-.toggle.on::after{transform:translateX(18px)}
-.config-panel{padding:16px 0;animation:slideUp 0.3s ease}
-.input-group{display:flex;align-items:center;gap:12px;margin-bottom:10px}
-.input-group label{min-width:130px;font-size:12px;color:var(--text2)}
-.input-group input,.input-group select{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-family:var(--mono);font-size:12px;width:160px}
-.input-group select{width:174px;cursor:pointer}
-.input-group input:focus,.input-group select:focus{outline:none;border-color:var(--accent)}
-.save-btn{font-family:var(--mono);font-size:11px;padding:8px 16px;border-radius:6px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;transition:all 0.2s;margin-top:4px}
-.save-btn:hover{background:var(--accent);color:var(--bg)}
-.stat-row{display:flex;gap:10px}
-.stat{flex:1;text-align:center;padding:16px 10px;background:var(--surface2);border-radius:10px;border:1px solid var(--border)}
-.stat-val{font-family:var(--mono);font-size:30px;font-weight:700;color:var(--accent)}
-.stat-lbl{font-size:11px;color:var(--muted);margin-top:4px}
-.actions{display:flex;gap:10px}
-.btn{font-family:var(--mono);font-size:12px;font-weight:500;padding:10px 20px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;transition:all 0.2s}
-.btn:hover{border-color:var(--text2);background:var(--surface3)}
-.btn.danger{border-color:#A54A3460;color:var(--red)}
-.btn.danger:hover{background:#A54A3418;border-color:var(--red)}
-.btn:disabled{opacity:0.3;cursor:not-allowed;pointer-events:none}
-.issue{background:#A54A3414;border:1px solid #A54A3433;border-radius:8px;padding:12px 14px;font-size:13px;margin-top:10px;color:var(--red)}
-.done-wrap{text-align:center;padding:20px 0}
-.done-wrap h2{font-size:16px!important;color:var(--text)!important;text-transform:none!important;letter-spacing:normal!important}
-.done-wrap p{color:var(--muted);font-size:14px;margin-top:8px}
-details summary{font-family:var(--mono);font-size:11px;color:var(--muted);cursor:pointer;padding:8px 0}
-.log-box{background:#000d0d;border:1px solid var(--border);border-radius:8px;padding:12px;max-height:200px;overflow-y:auto;font-family:var(--mono);font-size:11px;line-height:1.5;color:var(--muted)}
-.note{font-size:12px;color:var(--muted);margin-top:14px;line-height:1.6}
-.hidden{display:none!important}
+:root{--mono:'Geist Mono',monospace}
+html[data-f="sans"]{--disp:'Geist',sans-serif;--body:'Geist',sans-serif}
+html[data-f="grotesk"]{--disp:'Space Grotesk',sans-serif;--body:'Geist',sans-serif}
+html[data-f="editorial"]{--disp:'Fraunces',Georgia,serif;--body:'Geist',sans-serif}
+html[data-f="editorial"] h1 .it,html[data-f="editorial"] .qh{font-style:italic}
+html[data-t="dark"]{--bg:#001413;--hair:rgba(197,205,205,.12);--hair2:rgba(197,205,205,.22);--tx:#AEB9B8;--txhi:#F4F5F5;--dim:#5E706F}
+html[data-t="light"]{--bg:#F5F6F4;--hair:rgba(0,21,20,.11);--hair2:rgba(0,21,20,.2);--tx:#37514F;--txhi:#001413;--dim:#7A8C8A}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--body);background:var(--bg);color:var(--tx);min-height:100vh;-webkit-font-smoothing:antialiased}
+.nav{display:flex;align-items:center;gap:12px;padding:14px 30px;border-bottom:1px solid var(--hair)}
+.logo{display:flex;align-items:center;gap:9px;cursor:default}.logo .wm{font-family:var(--body);font-weight:500;font-size:15px;letter-spacing:-.01em;color:var(--txhi)}
+.ctx{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.vbadge{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--acc);border:1px solid var(--hair2);border-radius:4px;padding:2px 7px}
+.rsp{margin-left:auto;display:flex;align-items:center;gap:12px}
+.tabs{display:flex;gap:16px}
+.tab{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);cursor:pointer;padding-bottom:2px;border-bottom:1px solid transparent;background:none;border-top:none;border-left:none;border-right:none}
+.tab.on{color:var(--txhi);border-bottom-color:var(--acc)}
+.rec{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+.rd{width:6px;height:6px;border-radius:50%;background:var(--alert);position:relative}
+.nbtn{width:28px;height:28px;border:1px solid var(--hair);border-radius:5px;background:transparent;color:var(--tx);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px}.nbtn:hover{border-color:var(--hair2)}
+.body{padding:40px 40px 64px}.body-in{max-width:680px;margin:0 auto}
+.lbl{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim);display:flex;align-items:center;gap:10px;margin-bottom:18px}
+.lbl .ln{flex:1;height:1px;background:var(--hair)}.lbl .ct{color:var(--acc)}.lbl .ca{color:var(--alert)}
+h1{font-family:var(--disp);font-weight:400;font-size:42px;line-height:1.08;letter-spacing:-.02em;color:var(--txhi);max-width:600px}
+h1 .it{color:var(--acc)}
+.lede{font-size:14px;line-height:1.7;color:var(--tx);max-width:460px;margin:20px 0 0}.lede .hl{color:var(--txhi)}
+.big{font-family:var(--body);font-weight:300;font-size:74px;line-height:.9;letter-spacing:-.03em;color:var(--txhi)}.big .pc{font-size:24px;color:var(--dim)}
+.track{height:1px;background:var(--hair2);margin:20px 0 9px;max-width:520px;position:relative}.track .f{position:absolute;left:0;top:0;height:1px;background:var(--acc);transition:width .5s ease}
+.meta{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--dim);max-width:520px}
+.now{font-size:13px;color:var(--tx);margin-top:18px;display:flex;align-items:center;gap:10px}
+.spin{width:12px;height:12px;border:1.5px solid var(--hair2);border-top-color:var(--acc);border-radius:50%;display:inline-block}
+.vlog{font-family:var(--mono);font-size:11px;color:var(--acc);cursor:pointer;margin-top:18px;display:inline-block}.vlog:hover{color:var(--txhi)}
+.sec{margin-top:26px}
+.r{display:flex;align-items:baseline;gap:16px;padding:13px 0;border-bottom:1px solid var(--hair)}.r:last-child{border:none}
+.rn{font-family:var(--mono);font-size:11px;color:var(--dim);width:16px;flex-shrink:0}
+.rb{flex:1;font-size:14px;line-height:1.5}.rb .hl{color:var(--txhi)}.rb .al{color:var(--alert)}.rb .sub{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:4px;line-height:1.5}
+.rs{font-family:var(--mono);font-size:11px;flex-shrink:0;white-space:nowrap;display:flex;align-items:center;gap:6px}.rs.cl{color:var(--dim)}.rs.cl i{color:var(--acc)}.rs.sc{color:var(--acc)}.rs.pe{color:var(--dim)}.rs.al{color:var(--alert)}
+.act{font-family:var(--mono);font-size:11px;color:var(--acc);cursor:pointer;white-space:nowrap;flex-shrink:0}.act:hover{color:var(--txhi)}
+.qh{font-family:var(--disp);font-size:28px;color:var(--txhi);margin:6px 0 14px;font-weight:400}
+.qb{max-width:600px}.qb p{font-size:14px;line-height:1.75;margin:0 0 12px}.qb code{font-family:var(--mono);font-size:12px;color:var(--acc)}
+.qc{font-family:var(--mono);font-size:12px;color:var(--acc);border-left:1px solid var(--hair2);padding:6px 0 6px 16px;margin:10px 0;word-break:break-all}
+.qc.al{color:var(--alert);border-color:var(--alert)}
+.facts{display:flex;gap:36px;flex-wrap:wrap;padding:16px 0;border-top:1px solid var(--hair);border-bottom:1px solid var(--hair);margin-bottom:6px}
+.fl{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin-bottom:4px}.fv{font-family:var(--mono);font-size:14px;color:var(--txhi)}
+.actions{display:flex;gap:22px;margin-top:26px;padding-top:18px;border-top:1px solid var(--hair);flex-wrap:wrap}
+.alink{font-family:var(--mono);font-size:12px;color:var(--acc);cursor:pointer;display:inline-flex;align-items:center;gap:7px;background:none;border:none}.alink:hover{color:var(--txhi)}.alink.d{color:var(--alert)}.alink.n{color:var(--dim)}.alink.n:hover{color:var(--txhi)}
+.center{min-height:60vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px}.center h1{font-size:38px}
+.check{font-family:var(--disp);font-size:56px;line-height:1;color:var(--acc);margin-bottom:8px}
+.ntc{font-family:var(--mono);font-size:11px;margin-top:22px;color:var(--alert)}.ntc.g{color:var(--acc)}
+.gate{max-width:300px;margin:auto;width:100%;text-align:center}
+.glogo{display:flex;align-items:center;justify-content:center;gap:11px;margin-bottom:28px}.glogo .wm{font-family:var(--body);font-weight:500;font-size:22px;letter-spacing:-.01em;color:var(--txhi)}
+.fld{text-align:left;margin:0 0 12px}.fld label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-bottom:6px}
+.fld input{width:100%;background:transparent;border:none;border-bottom:1px solid var(--hair2);padding:9px 2px;color:var(--txhi);font-family:var(--mono);font-size:14px;outline:none}.fld input:focus{border-color:var(--acc)}
+.gerr{font-family:var(--mono);font-size:11px;color:var(--alert);margin-top:10px;min-height:14px}
+.seg{display:inline-flex;gap:14px}.seg span{font-family:var(--mono);font-size:11px;color:var(--dim);cursor:pointer;padding-bottom:2px;border-bottom:1px solid transparent}.seg span.on{color:var(--txhi);border-bottom-color:var(--acc)}
+.sw{width:34px;height:19px;border-radius:10px;background:var(--hair);border:1px solid var(--hair2);position:relative;cursor:pointer;flex-shrink:0;transition:.2s}.sw.on{background:var(--acc);border-color:var(--acc)}.sw::after{content:"";width:13px;height:13px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:.2s}.sw.on::after{transform:translateX(15px)}
+.sw1{width:18px;height:18px;border-radius:5px;cursor:pointer;border:1px solid var(--hair2)}.sw1.on{box-shadow:0 0 0 2px var(--bg),0 0 0 3px currentColor}
+.opt{font-family:var(--mono);font-size:11px;color:var(--tx);border:1px solid var(--hair);padding:4px 9px;border-radius:5px;cursor:pointer;background:none}.opt:hover{border-color:var(--hair2)}.opt.on{border-color:var(--acc);color:var(--acc)}
+.ninp{width:72px;background:transparent;border:none;border-bottom:1px solid var(--hair2);padding:5px 2px;color:var(--txhi);font-family:var(--mono);font-size:13px;outline:none;text-align:right}.ninp:focus{border-color:var(--acc)}
+.tinp{width:100%;background:transparent;border:none;border-bottom:1px solid var(--hair2);padding:6px 2px;color:var(--txhi);font-family:var(--mono);font-size:12px;outline:none}.tinp:focus{border-color:var(--acc)}
+.runbtn{font-family:var(--mono);font-size:10px;letter-spacing:.04em;color:var(--acc);cursor:pointer;background:none;border:1px solid var(--hair2);border-radius:5px;padding:4px 9px;margin:8px 0 0 32px;display:inline-flex;align-items:center;gap:6px}.runbtn:hover{border-color:var(--acc)}.runbtn.d{color:var(--alert)}.runbtn.d:hover{border-color:var(--alert)}
+.swrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.strm{font-family:var(--mono);font-size:12px;line-height:1.75;margin-top:14px;max-height:60vh;overflow-y:auto}
+.sl{display:flex;gap:12px}.stm{color:var(--dim);flex-shrink:0}.v-info{color:var(--tx)}.v-ok{color:var(--acc)}.v-warn{color:var(--alert)}.v-err{color:var(--alert)}.v-step{color:var(--txhi)}
+.qhtml{max-width:600px;font-size:14px;line-height:1.75;color:var(--tx)}
+.qhtml h1,.qhtml h2,.qhtml h3,.qhtml h4{font-family:var(--mono);color:var(--acc);margin:18px 0 8px;line-height:1.4;font-weight:500}
+.qhtml h1{font-size:17px}.qhtml h2{font-size:15px}.qhtml h3{font-size:14px}
+.qhtml p{margin:8px 0}.qhtml ul,.qhtml ol{margin:8px 0 8px 22px}.qhtml li{margin:4px 0}
+.qhtml code{font-family:var(--mono);font-size:12px;color:var(--acc)}
+.qhtml pre{background:var(--hair);border-left:1px solid var(--hair2);padding:12px 14px;margin:12px 0;overflow-x:auto;border-radius:0}
+.qhtml a{color:var(--acc)}.qhtml table{border-collapse:collapse;margin:12px 0}.qhtml td,.qhtml th{border:1px solid var(--hair2);padding:7px 10px;font-size:13px}
+@media (prefers-reduced-motion:no-preference){.spin{animation:esp .7s linear infinite}@keyframes esp{to{transform:rotate(360deg)}}.rd::after{content:"";position:absolute;inset:-3px;border-radius:50%;border:1px solid var(--alert);animation:erp 2s ease-out infinite;opacity:.5}@keyframes erp{to{opacity:0;transform:scale(2.2)}}}
 </style>
 </head>
 <body>
-<div class="page">
-  <div class="header">
-    <div class="logo">
-      <div class="logo-icon"><svg viewBox="0 0 24 24"><path d="M4 17l6-6-6-6M12 19h8"/></svg></div>
-      <h1>Shell<span>Port</span></h1>
-    </div>
-    <div class="tagline">Ephemeral coding interview workstation</div>
-  </div>
-
-  <!-- SETUP / RESET PROGRESS -->
-  <div class="card" id="card-progress">
-    <h2 id="progress-title">Preparing environment</h2>
-    <div class="progress-head">
-      <div class="progress-label" id="progress-text">Initializing</div>
-      <div class="progress-pct" id="progress-pct">0%</div>
-    </div>
-    <div class="progress-track"><div class="progress-fill" id="progress-bar" style="width:0%"></div></div>
-    <div class="steps" id="progress-steps"></div>
-  </div>
-
-  <!-- QUESTION (always visible once loaded) -->
-  <div class="card hidden" id="card-question">
-    <h2>Interview Question</h2>
-    <div class="question-box" id="question-box">
-      <span class="question-loading">Loading question...</span>
-    </div>
-    <p class="question-note">Read through this while your environment builds. You can start working once your IDE is open.</p>
-  </div>
-
-  <!-- IDE LAUNCH -->
-  <div class="card hidden" id="card-ide">
-    <h2>Environment Ready</h2>
-    <div class="ide-grid" id="ide-buttons"></div>
-    <p class="note">All work must be saved inside <strong>/workspaces</strong>. Everything outside is destroyed on cleanup.</p>
-  </div>
-
-  <!-- TIMER -->
-  <div class="card hidden" id="card-timer">
-    <h2>Session Timer</h2>
-    <div class="timer-wrap" id="timer-wrap">
-      <div class="timer-big" id="timer-display">00:00:00</div>
-      <div class="timer-meta">
-        <div><b>Active</b> <span id="t-active">00:00:00</span></div>
-        <div><b>Idle</b> <span id="t-idle">00:00:00</span></div>
-        <div><b>Limit</b> <span id="t-limit">--:--:--</span></div>
-        <div><b>Action</b> <span id="t-action">--</span></div>
-      </div>
-    </div>
-    <div id="timer-alert" class="timer-alert hidden"></div>
-  </div>
-
-  <!-- ADMIN -->
-  <div class="card hidden" id="card-admin">
-    <h2>Admin Panel</h2>
-    <h3>Features</h3>
-    <div id="admin-features"></div>
-    <div id="timer-config" class="hidden">
-      <h3>Timer Settings</h3>
-      <div class="config-panel">
-        <div class="input-group">
-          <label>On expiry</label>
-          <select id="cfg-action">
-            <option value="NOTIFY">NOTIFY - announce only</option>
-            <option value="LOCK">LOCK - freeze workspace</option>
-            <option value="WIPE">WIPE - auto cleanup</option>
-          </select>
-        </div>
-        <div class="input-group">
-          <label>Time limit (min)</label>
-          <input type="number" id="cfg-limit" min="1" max="480" value="60">
-        </div>
-        <div class="input-group">
-          <label>Idle threshold (min)</label>
-          <input type="number" id="cfg-inactivity" min="1" max="60" value="10">
-        </div>
-        <button class="save-btn" onclick="saveTimerConfig()">Save</button>
-      </div>
-    </div>
-
-    <div id="admin-question" class="hidden">
-      <h3>Question Assignment</h3>
-      <div class="assigned-question" id="assigned-question"></div>
-    </div>
-
-    <div id="admin-telemetry" class="hidden">
-      <h3>Telemetry</h3>
-      <div class="stat-row" id="telemetry-stats"></div>
-    </div>
-  </div>
-
-  <!-- ACTIONS -->
-  <div class="card hidden" id="card-actions">
-    <div class="actions">
-      <button class="btn danger" id="btn-end" onclick="endInterview()">End Interview</button>
-      <button class="btn danger hidden" id="btn-reset" onclick="adminReset()">Reset for Next Candidate</button>
-    </div>
-  </div>
-
-  <!-- DONE -->
-  <div class="card hidden" id="card-done">
-    <div class="done-wrap">
-      <h2>ShellPort removed</h2>
-      <p>Nothing left behind. Thank you for interviewing with us.</p>
-    </div>
-  </div>
-
-  <!-- LOG -->
-  <details>
-    <summary>build log</summary>
-    <div class="log-box" id="build-log"></div>
-  </details>
-</div>
-
+<div class="nav"><div class="logo" id="logo"></div><span class="ctx" id="ctx"></span><span class="vbadge" id="vbadge"></span><div class="rsp" id="rsp"></div></div>
+<div class="body"><div class="body-in" id="body"></div></div>
 <script>
 const $=id=>document.getElementById(id);
-let ws, S={status:"initializing",steps:[],config:{},ides:[],question:null,questionHtml:null,questionError:null,questionLoading:false,questionVisible:true,timer:null,adminMode:false};
-let currentPct = 0;
+const root=document.documentElement;
+const mq=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');
+const PAL={cerulean:{d:'#4FA3E8',l:'#1F61AE'},foam:{d:'#74B2BA',l:'#2E6E80'},kelp:{d:'#84BD7F',l:'#3B7A43'},tentacle:{d:'#E0B45F',l:'#8A5A14'},violet:{d:'#C49ABF',l:'#8A5E83'},mono:{d:'#C5CDCD',l:'#3A4F4D'}};
+const ALERT={d:'#CF8060',l:'#A54A34'};
+const MARK='<svg width="28" height="24" viewBox="0 0 28 24"><path d="M6 4H3.5v16H6" fill="none" stroke="var(--acc)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 4h2.5v16H22" fill="none" stroke="var(--acc)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 8l4 4-4 4" fill="none" stroke="var(--acc)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
-function fmt(s){if(s==null)return"--:--:--";const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=s%60;
-return`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(x).padStart(2,"0")}`}
+let S={status:"initializing",mode:"candidate",adminAvailable:false,adminMode:false,appearance:{theme:"system",accent:"cerulean",font:"sans"},
+  steps:[],config:{},ides:[],enabledEditors:[],terminalEnabled:true,question:null,questionHtml:null,questionError:null,questionLoading:false,
+  questionVisible:true,questionPdf:null,timer:null,eventComplete:null,validationLocked:false,error:null,
+  fixes:{trouble:[],manual:[],emergency:null}};
+const ui={view:'auto',tab:'settings',unlocked:false,localComplete:false,help:null,logView:false};
+let adminToken=null, sessionTheme=null, adminCfg=null;
+let prog={pct:0,op:'',phase:'setup'};
 
-function connect(){
-  ws=new WebSocket(`${location.protocol==="https:"?"wss:":"ws:"}//${location.host}`);
-  ws.onmessage=e=>handle(JSON.parse(e.data));
-  ws.onclose=()=>setTimeout(connect,2000);
+// ── Appearance ───────────────────────────────────────────────────────────────
+function resolveTheme(){
+  if(sessionTheme) return sessionTheme;
+  const t=(S.appearance&&S.appearance.theme)||'system';
+  if(t==='system') return (mq&&mq.matches)?'dark':'light';
+  return t;
+}
+function applyTokens(){
+  const theme=resolveTheme(), font=(S.appearance&&S.appearance.font)||'sans', accent=(S.appearance&&S.appearance.accent)||'cerulean';
+  root.dataset.t=theme; root.dataset.f=font;
+  const tk=theme==='dark'?'d':'l';
+  root.style.setProperty('--acc',(PAL[accent]||PAL.cerulean)[tk]);
+  root.style.setProperty('--alert',ALERT[tk]);
+}
+applyTokens();
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function pad(n){return String(n).padStart(2,'0')}
+function mmss(s){if(s==null||s<0)s=0;const m=Math.floor(s/60),x=Math.floor(s%60);return pad(m)+':'+pad(x)}
+function trk(p){return '<div class="track"><div class="f" style="width:'+Math.max(0,Math.min(100,p))+'%"></div></div>'}
+function rw(n,b,s,sc,a,go){const st=s?'<span class="rs '+sc+'">'+(sc==='cl'?'<i class="ti ti-check"></i>':'')+s+'</span>':'';const ac=a?'<span class="act" '+(go?'data-go="'+go+'"':'')+'>'+a+'</span>':'';return '<div class="r">'+(n?'<span class="rn">'+n+'</span>':'')+'<div class="rb">'+b+'</div>'+st+ac+'</div>'}
+function stepRow(n,t,cause,c,al){return '<div class="r" style="display:block"><div style="display:flex;gap:16px;align-items:baseline"><span class="rn">'+n+'</span><span class="rb"><span class="hl">'+t+'</span>'+(cause?'<div class="sub">'+cause+'</div>':'')+'</span></div><div class="qc'+(al?' al':'')+'" style="margin:8px 0 0 32px">'+c+'</div></div>'}
+function tg(n,d,on,key){return '<div class="r" style="align-items:center"><div class="rb"><span class="hl">'+n+'</span>'+(d?'<div class="sub">'+d+'</div>':'')+'</div><div class="sw '+(on?'on':'')+'" data-tg="'+key+'"></div></div>'}
+const STATUS_CLASS={done:'cl',running:'sc',pending:'pe',warning:'al',error:'al',skipped:'pe'};
+const STATUS_WORD={done:'done',running:'…',pending:'pending',warning:'check',error:'failed',skipped:'skipped'};
+
+// ── Screens ──────────────────────────────────────────────────────────────────
+function machineId(){return (S.config&&S.config.MACHINE_LABEL)||'Workstation'}
+function elapsedSecs(){return S.timer?Math.max(0,S.timer.active):null}
+function remainingSecs(){return S.timer?Math.max(0,(S.timer.limitSecs||0)-S.timer.active):null}
+
+function progressBlock(label,right){
+  return '<div class="big">'+prog.pct+'<span class="pc">%</span></div>'+trk(prog.pct)
+    +'<div class="meta"><span>'+esc(prog.op||label||'Working')+'</span><span>'+esc(right||'')+'</span></div>'
+    +'<div class="now"><span class="spin"></span>'+esc(prog.op||'Preparing')+'</div>';
+}
+function stepsBlock(){
+  if(!S.steps||!S.steps.length) return '';
+  let h='<div class="sec">';
+  S.steps.forEach(st=>{h+=rw('','<span class="hl">'+esc(st.label)+'</span>',STATUS_WORD[st.status]||st.status,STATUS_CLASS[st.status]||'pe')});
+  return h+'</div>';
+}
+function qMode(){return (S.config&&S.config.QUESTION_DELIVERY)||'auto'}
+function showQuestionPdf(){const m=qMode();return !!S.questionPdf&&(m==='pdf'||(m==='auto'&&!S.questionHtml))}
+function questionBody(){
+  const mode=qMode();
+  if(mode==='none') return '<p class="lede" style="margin-top:0">Your interviewer will provide the question for this session.</p>';
+  if(S.questionLoading) return '<p class="lede" style="margin-top:0">Loading the interview question…</p>';
+  if(S.questionError && !S.question && !S.questionHtml && !S.questionPdf) return '<p class="lede" style="margin-top:0;color:var(--alert)">'+esc(S.questionError)+'</p>';
+  let h='';
+  if(S.question) h+='<div class="qh">'+esc(S.question)+'</div>';
+  if(mode!=='pdf' && S.questionHtml) h+='<div class="qhtml">'+S.questionHtml+'</div>';
+  else if(!S.question && !S.questionPdf) h+='<p class="lede" style="margin-top:0">Your interviewer will share the question.</p>';
+  else if(mode==='pdf' || (mode==='auto'&&!S.questionHtml)) h+='<p class="lede" style="margin-top:0">Your full question is in the PDF below.</p>';
+  return h;
+}
+function editorActions(){
+  let h='';
+  (S.enabledEditors||[]).forEach(n=>{h+='<button class="alink" data-ide="'+esc(n)+'">Start in '+esc(n)+' →</button>'});
+  h+='<button class="alink" data-ide="vscode.dev">Start in vscode.dev →</button>';
+  h+='<button class="alink" data-ide="github.dev">Start in github.dev →</button>';
+  if(S.terminalEnabled) h+='<button class="alink" data-term="1">Start in terminal →</button>';
+  return h;
 }
 
-function handle(msg){
-  switch(msg.type){
-    case"init":S=msg.state;render();break;
-    case"status":S.status=msg.status;render();break;
-    case"step":upsert(msg);break;
-    case"progress":setProgress(msg.pct,msg.phase);break;
-    case"log":appendLog(msg.line);break;
-    case"question":
-      S.question=msg.text;S.questionHtml=msg.html;S.questionError=msg.error;S.questionLoading=false;
-      renderQuestion();if(S.adminMode)renderAdmin();break;
-    case"question_loading":S.questionLoading=true;renderQuestion();if(S.adminMode)renderAdmin();break;
-    case"question_visibility":S.questionVisible=msg.visible;renderQuestion();if(S.adminMode)renderAdmin();break;
-    case"clear_steps":$("progress-steps").innerHTML="";break;
-    case"timer":S.timer=msg;renderTimer();break;
-    case"timer_expired":onExpired(msg);break;
-    case"timer_stopped":S.timer=null;$("card-timer").classList.add("hidden");break;
-    case"telemetry":renderTelemetry(msg.data);break;
-    case"cleanup_issues":renderIssues(msg.issues);break;
-    case"cleanup_complete":S.status="done";render();break;
-    case"config":S.config=msg.config;renderAdmin();break;
+function scrInstall(){
+  return '<div class="lbl"><span>Interview prep — your computer</span><span class="ln"></span><span class="ct">runs isolated</span></div>'
+    +progressBlock('Building isolated environment','')
+    +'<p class="lede">ShellPort runs in a container and <span class="hl">removes itself completely</span> when you finish. Nothing on your machine is changed.</p>'
+    +'<span class="vlog" data-go="log">View build log →</span>';
+}
+function scrBuild(){
+  return '<div class="lbl"><span>Interview prep — building environment</span><span class="ln"></span><span class="ct">'+esc(machineId())+'</span></div>'
+    +progressBlock('Building container image','')
+    +'<span class="vlog" data-go="log">View build log →</span>'+stepsBlock();
+}
+function scrQuestion(){
+  const candidate=curView()==='candidate';
+  const t=candidate?(elapsedSecs()!=null?'elapsed '+mmss(elapsedSecs()):'in progress'):(remainingSecs()!=null?'remaining '+mmss(remainingSecs()):'in progress');
+  const ctxLbl=candidate?'Your question':'Question';
+  return '<div class="lbl"><span>'+ctxLbl+'</span><span class="ln"></span><span>'+esc(t)+'</span></div>'
+    +questionBody()
+    +(showQuestionPdf()?'<div style="margin-top:14px"><a class="alink" href="'+esc(S.questionPdf)+'" target="_blank">Download question PDF →</a></div>':'')
+    +'<div class="actions">'+editorActions()+'<button class="alink d" data-go="end">End interview →</button></div>';
+}
+function scrComplete(){
+  const candidate=curView()==='candidate';
+  const time=elapsedSecs()!=null?mmss(elapsedSecs()):'—';
+  return '<div class="center"><div class="lbl" style="justify-content:center"><span>Interview complete</span></div>'
+    +'<h1>Thank you for interviewing with <span class="it">DigitalOcean</span>.</h1>'
+    +'<p class="lede" style="text-align:center;margin:18px auto 0">'+(candidate?'Show your interviewer your completion time during the meeting.':'Please return this workstation to your interviewer.')+'</p>'
+    +'<div class="facts" style="justify-content:center;margin-top:22px"><div><div class="fl">'+(candidate?'Completion time':'Time used')+'</div><div class="fv">'+time+'</div></div></div>'
+    +(candidate
+      ?'<div class="actions" style="justify-content:center;border-top:none"><button class="alink d" data-go="remove">Reset &amp; remove ShellPort →</button></div>'
+      :'<div class="ntc">This machine is ready to be reset.</div>')
+    +'</div>';
+}
+function scrRemove(){
+  return '<div class="lbl"><span>Removing ShellPort — restoring your computer</span><span class="ln"></span><span class="ct">'+prog.pct+'%</span></div>'
+    +progressBlock('Removing container and volumes','')
+    +'<p class="lede">Returning your machine to its original state. Nothing is left behind.</p>'
+    +'<span class="vlog" data-go="log">View removal log →</span>';
+}
+function scrRemoved(){
+  return '<div class="center"><div class="check">✓</div><h1>ShellPort <span class="it">removed</span>.</h1>'
+    +'<p class="lede" style="text-align:center;margin:18px auto 0">Your computer has been returned to its original state. Nothing was left behind.</p>'
+    +'<div class="ntc g">Verified clean — you can close this window</div></div>';
+}
+function scrNeedsReset(){
+  return '<div class="lbl"><span class="ca">Validation hold</span><span class="ln"></span></div>'
+    +'<h1>This machine needs a <span class="it" style="color:var(--alert)">reset</span>.</h1>'
+    +'<p class="lede">Residue from a previous session was detected and could not be cleared automatically. An administrator must reset this workstation before the next interview.</p>'
+    +stepsBlock();
+}
+function scrFailed(){
+  return '<div class="lbl"><span>Interview prep — setup failed</span><span class="ln"></span><span class="ca">setup error</span></div>'
+    +'<h1>The environment <span class="it" style="color:var(--alert)">failed</span> to build.</h1>'
+    +'<p class="lede">Setup could not complete. Review the error below, then retry — or open troubleshooting.</p>'
+    +(S.error?'<div class="qc al" style="margin-top:16px">'+esc(S.error)+'</div>':'')
+    +'<div class="actions"><button class="alink" data-go="retry">Retry setup →</button><button class="alink" data-go="troubleshoot">Troubleshooting →</button><button class="alink n" data-go="manual">Manual fallback →</button></div>';
+}
+function scrEventComplete(){
+  const e=S.eventComplete||{};
+  let h='<div class="center"><div class="check">✓</div><h1>Interview event <span class="it">complete</span>.</h1>'
+    +'<p class="lede" style="text-align:center;margin:18px auto 0">'+esc(e.message||'This machine is clean.')+'</p>';
+  if(e.uninstall) h+='<div class="qc" style="margin:22px auto 0;text-align:left;max-width:440px">'+esc(e.uninstall)+'</div>';
+  if(e.canShutdown) h+='<div class="actions" style="justify-content:center;border-top:none"><button class="alink d" data-go="shutdown">Shut down machine →</button></div>';
+  return h+'</div>';
+}
+
+// Admin
+function scrGate(){
+  return '<div class="center"><div class="gate"><div class="glogo">'+MARK+'<span class="wm">ShellPort</span></div>'
+    +'<div class="fld" style="margin-top:6px"><label>Admin password</label><input type="password" id="pw" autocomplete="current-password"></div>'
+    +'<div class="actions" style="border:none;justify-content:center;margin-top:14px;padding:0"><button class="alink" id="unl">Unlock →</button></div>'
+    +'<div class="gerr" id="gerr"></div></div></div>';
+}
+function scrSettings(){
+  if(!ui.unlocked) return scrGate();
+  const c=S.config||{}, a=S.appearance||{};
+  const accentSwatches=['cerulean','foam','kelp','tentacle','violet','mono'].map(p=>'<span class="sw1 '+(a.accent===p?'on':'')+'" data-acc="'+p+'" style="background:'+PAL[p][resolveTheme()==='dark'?'d':'l']+';color:'+PAL[p][resolveTheme()==='dark'?'d':'l']+'"></span>').join('');
+  const fonts=[['sans','Geist'],['grotesk','Grotesk'],['editorial','Editorial']].map(f=>'<span class="opt '+(a.font===f[0]?'on':'')+'" data-fnt="'+f[0]+'">'+f[1]+'</span>').join('');
+  const themeSeg=[['system','System'],['light','Light'],['dark','Dark']].map(t=>'<span class="'+(a.theme===t[0]?'on':'')+'" data-thm="'+t[0]+'">'+t[1]+'</span>').join('');
+  const localNames=(S.ides||[]).filter(i=>i.kind==='local').map(i=>i.name);
+  const en=S.enabledEditors||[];
+  let editors='';
+  const editorNames=['VS Code','Cursor','Windsurf'].concat(localNames.filter(n=>!['VS Code','Cursor','Windsurf'].includes(n)));
+  editorNames.forEach(n=>{const present=localNames.includes(n);editors+=tg(n,present?'':'not detected on this machine',en.includes(n),'ed:'+n)});
+  editors+=tg('Terminal access','Allow open-in-terminal',S.terminalEnabled,'term');
+  const timerOn=c.ENABLE_TIMER==='true';
+  const expiry=['NOTIFY','LOCK','WIPE'].map(x=>'<span class="'+((c.TIMEOUT_ACTION||'NOTIFY')===x?'on':'')+'" data-exp="'+x+'">'+x.charAt(0)+x.slice(1).toLowerCase()+'</span>').join('');
+  const delivery=[['auto','Auto'],['inline','Inline'],['pdf','PDF'],['none','None']].map(d=>'<span class="'+((c.QUESTION_DELIVERY||'auto')===d[0]?'on':'')+'" data-qd="'+d[0]+'">'+d[1]+'</span>').join('');
+  return '<div class="lbl"><span>Settings — admin unlocked</span><span class="ln"></span><span class="ct">unlocked</span></div>'
+    +'<h1 style="font-size:32px">Configure the <span class="it">event</span>.</h1>'
+    +'<div style="max-width:600px;margin-top:6px">'
+    +'<div class="lbl" style="margin:24px 0 2px"><span>Appearance</span></div>'
+    +'<div class="r" style="align-items:center"><div class="rb"><span class="hl">Theme</span></div><div class="seg" id="seg-theme">'+themeSeg+'</div></div>'
+    +'<div class="r" style="align-items:center"><div class="rb"><span class="hl">Accent</span></div><div class="swrow">'+accentSwatches+'</div></div>'
+    +'<div class="r" style="align-items:center"><div class="rb"><span class="hl">Font</span></div><div class="swrow">'+fonts+'</div></div>'
+    +'<div class="lbl" style="margin:24px 0 2px"><span>Editors</span></div>'+editors
+    +'<div class="lbl" style="margin:24px 0 2px"><span>Question</span></div>'
+    +'<div class="r"><div class="rb" style="width:100%"><span class="hl">Source link</span><div class="sub">Paste the Google Docs or Sheets "Copy link". A doc with one question per tab — keep the tab selected when you copy, or use a sheet that indexes them.</div><input class="tinp" type="url" placeholder="https://docs.google.com/document/d/…" value="'+esc((adminCfg&&adminCfg.QUESTIONS_URL)||'').replace(/"/g,'&quot;')+'" data-src></div></div>'
+    +'<div class="r" style="align-items:center"><div class="rb"><span class="hl">Delivery</span><div class="sub">Auto shows it in-dashboard, or the PDF if it won\'t format. None = provided separately (e.g. emailed).</div></div><div class="seg" id="seg-qd">'+delivery+'</div></div>'
+    +(S.question?'<div class="r" style="align-items:center"><div class="rb"><span class="hl">'+esc(S.question)+'</span><div class="sub">Visible to candidate: '+(S.questionVisible?'yes':'no')+'</div></div><span class="act" data-go="reroll">Reroll</span><span class="act" data-go="qtoggle" style="margin-left:14px">'+(S.questionVisible?'Hide':'Show')+'</span></div>':'<p class="lede" style="margin-top:0">No question loaded.</p>')
+    +'<div class="lbl" style="margin:24px 0 2px"><span>Timer</span></div>'
+    +tg('Enable timer',(c.TIME_LIMIT_MINUTES||'60')+' minute limit',timerOn,'timer')
+    +(timerOn?'<div class="r" style="align-items:center"><div class="rb"><span class="hl">Time limit</span><div class="sub">Minutes of active work before expiry</div></div><input class="ninp" type="number" min="1" max="600" value="'+esc(c.TIME_LIMIT_MINUTES||'60')+'" data-num="TIME_LIMIT_MINUTES"></div>':'')
+    +(timerOn?'<div class="r" style="align-items:center"><div class="rb"><span class="hl">Idle threshold</span><div class="sub">Minutes of no activity counted as idle</div></div><input class="ninp" type="number" min="1" max="120" value="'+esc(c.INACTIVITY_TIMEOUT_MINUTES||'10')+'" data-num="INACTIVITY_TIMEOUT_MINUTES"></div>':'')
+    +(timerOn?'<div class="r" style="align-items:center"><div class="rb"><span class="hl">On expiry</span></div><div class="seg" id="seg-exp">'+expiry+'</div></div>':'')
+    +'<div class="lbl" style="margin:24px 0 2px"><span>Machine</span></div>'
+    +'<div class="actions" style="border:none;padding:6px 0"><button class="alink" data-go="reset">Reset for next candidate →</button><button class="alink d" data-go="endevent">End interview event →</button></div>'
+    +'</div>';
+}
+function scrReset(){
+  const st=S.status;
+  if(st==='resetting'||st==='setup'||st==='ending'){
+    return '<div class="lbl"><span>Reset — preparing for next candidate</span><span class="ln"></span><span class="ct">'+prog.pct+'%</span></div>'
+      +progressBlock('Scrubbing host','')+stepsBlock();
   }
+  if(st==='event_complete') return scrEventComplete();
+  // ready / clean
+  return '<div class="lbl"><span>Reset complete</span><span class="ln"></span><span class="ct">verified clean</span></div>'
+    +'<h1>The workstation is <span class="it">clean</span>.</h1>'
+    +'<p class="lede">Verified against the pre-install snapshot.</p>'
+    +'<div class="sec">'+rw('','<span class="hl">Prepare for next candidate</span><div class="sub">Scrub the host and relaunch into a ready state with a new question.</div>','','','Relaunch →','reset')
+    +rw('','<span class="hl">End interview event</span><div class="sub">Full teardown, prepare for storage.</div>','','','End event →','endevent')+'</div>';
+}
+function scrLog(withBack){
+  return '<div class="lbl"><span>Build log</span><span class="ln"></span><span>read-only · live</span></div>'
+    +'<p class="lede" style="margin-top:0">The full step-by-step, streamed as it runs — so you can see exactly where a build or reset stalls.</p>'
+    +'<div class="strm" id="strm"></div>'
+    +(withBack?'<div class="actions"><button class="alink n" data-go="back">← Back</button></div>':'');
+}
+
+// Help — steps come from the server (S.fixes), resolved per-platform, so the
+// command shown is exactly what "Run in terminal" executes.
+function fixRow(num,f){
+  const n=String(num).padStart(2,'0'), runnable=f.run!==false;
+  let h='<div class="r" style="display:block"><div style="display:flex;gap:16px;align-items:baseline"><span class="rn">'+n+'</span>'
+    +'<span class="rb"><span class="hl">'+esc(f.label)+'</span>'+(f.cause?'<div class="sub">'+esc(f.cause)+'</div>':'')+'</span></div>';
+  if(runnable){
+    h+='<div class="qc" style="margin:8px 0 0 32px">'+esc(f.cmd)+'</div>'
+      +'<button class="runbtn'+(f.id==='m-remove'?' d':'')+'" data-run="'+esc(f.id)+'"><i class="ti ti-player-play"></i>Run in terminal</button>';
+  } else {
+    h+='<div class="sub" style="margin:8px 0 0 32px">'+esc(f.cmd)+'</div>';
+  }
+  return h+'</div>';
+}
+function scrTrouble(){
+  const fx=S.fixes||{}, tr=fx.trouble||[], em=fx.emergency;
+  let h='<div class="lbl"><span>Troubleshooting — quick fixes</span><span class="ln"></span></div>'
+    +'<h1>When something <span class="it">won\'t cooperate</span>.</h1>'
+    +'<p class="lede">The common failure at each step and the one command that clears it — run it right here, or copy it. If none apply, use the emergency reset or the manual fallback.</p><div class="sec">';
+  tr.forEach((t,i)=>h+=fixRow(i+1,t));
+  h+='</div>';
+  if(em){
+    h+='<div class="lbl" style="margin-top:30px"><span class="ca">Emergency reset</span><span class="ln"></span></div>'
+      +'<p class="lede" style="margin-top:0">When state is corrupted and nothing starts cleanly — force a ShellPort-scoped rebuild. Your other Docker projects are left untouched.</p>'
+      +'<div class="qc al">'+esc(em.cmd)+'</div>'
+      +'<button class="runbtn d" data-run="'+esc(em.id)+'" style="margin-left:0"><i class="ti ti-player-play"></i>Run in terminal</button>';
+  }
+  return h+'<div class="actions"><button class="alink n" data-go="back">← Back</button><button class="alink" data-go="manual">Manual fallback →</button></div>';
+}
+function scrManual(){
+  const mn=(S.fixes||{}).manual||[];
+  let h='<div class="lbl"><span>Manual fallback — if nothing else works</span><span class="ln"></span></div>'
+    +'<h1>Run every step by <span class="it">hand</span>.</h1>'
+    +'<p class="lede">If the dashboard fails on any machine, the whole flow works from a terminal. Run each step here, or copy it — in order.</p><div class="sec">';
+  mn.forEach((t,i)=>h+=fixRow(i+1,t));
+  return h+'</div><div class="actions"><button class="alink n" data-go="back">← Back</button></div>';
+}
+
+// ── View resolution + render ─────────────────────────────────────────────────
+function curView(){return (S.adminAvailable && ui.view==='admin')?'admin':(S.mode||'candidate')}
+function screen(){
+  const view=curView(), st=S.status;
+  if(ui.help==='troubleshoot') return scrTrouble();
+  if(ui.help==='manual') return scrManual();
+  if(view==='admin'){
+    if(!ui.unlocked) return scrGate();
+    if(ui.tab==='log') return scrLog(false);
+    if(ui.tab==='reset') return scrReset();
+    return scrSettings();
+  }
+  if(ui.logView) return scrLog(true);
+  if(st==='event_complete') return scrEventComplete();
+  if(st==='error') return scrFailed();
+  if(st==='needs_reset') return scrNeedsReset();
+  if(st==='cleanup'||st==='ending') return scrRemove();
+  if(st==='done') return scrRemoved();
+  if(st==='ready') return ui.localComplete?scrComplete():scrQuestion();
+  return view==='managed'?scrBuild():scrInstall();
+}
+function ctxLabel(){
+  const view=curView();
+  if(view==='admin') return ui.tab==='reset'?('Reset · '+machineId()):(ui.tab==='log'?('Build log · '+machineId()):'Settings');
+  return view==='managed'?machineId():'Your computer';
+}
+function vbadgeLabel(){const v=curView();return v.charAt(0).toUpperCase()+v.slice(1)}
+
+function renderNav(){
+  $('logo').innerHTML=MARK+'<span class="wm">ShellPort</span>';
+  $('ctx').textContent=ctxLabel();
+  $('vbadge').textContent=vbadgeLabel();
+  const view=curView();
+  let r='';
+  if(view==='admin'){
+    if(ui.unlocked){
+      r+='<div class="tabs">'
+        +'<button class="tab '+(ui.tab==='settings'?'on':'')+'" data-tab="settings">Settings</button>'
+        +'<button class="tab '+(ui.tab==='reset'?'on':'')+'" data-tab="reset">Reset</button>'
+        +'<button class="tab '+(ui.tab==='log'?'on':'')+'" data-tab="log">Build log</button></div>';
+      r+='<div class="rec"><span class="rd"></span>Recording</div>';
+    }
+    r+='<button class="nbtn" data-act="exit" title="Exit admin"><i class="ti ti-x"></i></button>';
+  } else {
+    if(S.adminAvailable) r+='<button class="nbtn" data-act="help" title="Troubleshooting"><i class="ti ti-lifebuoy"></i></button>';
+    if(S.adminAvailable) r+='<button class="nbtn" data-act="lock" title="Admin"><i class="ti ti-lock"></i></button>';
+  }
+  r+='<button class="nbtn" data-act="theme" title="Theme"><i class="ti ti-'+(resolveTheme()==='dark'?'sun':'moon')+'"></i></button>';
+  $('rsp').innerHTML=r;
 }
 
 function render(){
-  const s=S.status;
-
-  // Progress card
-  $("card-progress").classList.toggle("hidden",s==="ready"||s==="done");
-  if(s==="setup")$("progress-title").textContent="Preparing environment";
-  else if(s==="resetting")$("progress-title").textContent="Resetting for next candidate";
-  else if(s==="cleanup")$("progress-title").textContent="Cleaning up";
-  else if(s==="error")$("progress-title").textContent="Setup failed";
-
-  renderQuestion();
-  $("card-ide").classList.toggle("hidden",s!=="ready");
-  if(s==="ready"){
-    renderIDEs();
-    $("btn-end").disabled=false;
-    $("btn-reset").disabled=false;
-  }
-
-  $("card-timer").classList.toggle("hidden",!(s==="ready"&&S.timer));
-  if(S.timer)renderTimer();
-
-  $("card-admin").classList.toggle("hidden",!S.adminMode||s==="done"||s==="cleanup");
-  if(S.adminMode)renderAdmin();
-
-  $("card-actions").classList.toggle("hidden",s!=="ready");
-  $("btn-reset").classList.toggle("hidden",!S.adminMode);
-
-  $("card-done").classList.toggle("hidden",s!=="done");
-
-  (S.steps||[]).forEach(st=>upsert(st));
+  applyTokens();
+  renderNav();
+  const b=$('body');
+  b.innerHTML=screen();
+  wireBody();
+  if(b.querySelector('#strm')) populateLog();
 }
 
-function upsert(step){
-  const box=$("progress-steps");
-  let el=box.querySelector(`[data-id="${step.id}"]`);
-  if(!el){el=document.createElement("div");el.className="step";el.dataset.id=step.id;
-    el.innerHTML=`<div class="dot"></div><span></span>`;box.appendChild(el)}
-  el.className=`step ${step.status}`;el.querySelector("span").textContent=step.label;
-  if(step.status==="running")$("progress-text").textContent=step.label;
-  else if(step.status==="done"&&S.status==="ready")$("progress-text").textContent="Ready";
+// ── Event wiring ─────────────────────────────────────────────────────────────
+$('rsp').addEventListener('click',e=>{
+  const btn=e.target.closest('[data-tab],[data-act]');if(!btn)return;
+  if(btn.dataset.tab){ui.tab=btn.dataset.tab;render();return}
+  const a=btn.dataset.act;
+  if(a==='theme'){sessionTheme=resolveTheme()==='dark'?'light':'dark';render()}
+  else if(a==='lock'){ui.view='admin';ui.tab='settings';render()}
+  else if(a==='exit'){ui.view='auto';ui.help=null;render()}
+  else if(a==='help'){ui.help='troubleshoot';render()}
+});
+$('logo').addEventListener('click',()=>{if(curView()==='admin'){ui.view='auto';render()}});
+
+function wireBody(){
+  const b=$('body');
+  b.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>go(el.dataset.go));
+  b.querySelectorAll('[data-ide]').forEach(el=>el.onclick=()=>launchIDE(el.dataset.ide));
+  b.querySelectorAll('[data-term]').forEach(el=>el.onclick=()=>openTerminal(el));
+  // appearance
+  b.querySelectorAll('[data-acc]').forEach(el=>el.onclick=()=>setAppearance('accent',el.dataset.acc));
+  b.querySelectorAll('[data-fnt]').forEach(el=>el.onclick=()=>setAppearance('font',el.dataset.fnt));
+  b.querySelectorAll('[data-thm]').forEach(el=>el.onclick=()=>{sessionTheme=null;setAppearance('theme',el.dataset.thm)});
+  b.querySelectorAll('[data-tg]').forEach(el=>el.onclick=()=>toggle(el.dataset.tg));
+  b.querySelectorAll('[data-exp]').forEach(el=>el.onclick=()=>saveConfig({TIMEOUT_ACTION:el.dataset.exp}));
+  b.querySelectorAll('[data-qd]').forEach(el=>el.onclick=()=>saveConfig({QUESTION_DELIVERY:el.dataset.qd}));
+  b.querySelectorAll('[data-num]').forEach(el=>el.onchange=()=>{const v=Math.max(parseInt(el.min||'1',10),Math.min(parseInt(el.max||'9999',10),parseInt(el.value||'0',10)||parseInt(el.min||'1',10)));saveConfig({[el.dataset.num]:String(v)})});
+  b.querySelectorAll('[data-src]').forEach(el=>el.onchange=()=>saveSource(el.value.trim()));
+  b.querySelectorAll('[data-run]').forEach(el=>el.onclick=()=>runFix(el.dataset.run,el));
+  const unl=$('unl'); if(unl){unl.onclick=unlock; const pw=$('pw'); if(pw)pw.onkeydown=e=>{if(e.key==='Enter')unlock()}}
 }
 
-function setProgress(pct){
-  currentPct=pct;
-  $("progress-bar").style.width=pct+"%";
-  $("progress-pct").textContent=pct+"%";
-}
-
-function appendLog(line){const l=$("build-log");l.textContent+=line+"\n";l.scrollTop=l.scrollHeight}
-
-function renderQuestion(){
-  const box=$("question-box");
-  const card=$("card-question");
-  const s=S.status;
-  
-  if(s==="cleanup"||s==="done"){
-    card.classList.add("hidden");
-    return;
-  }
-  // Admin can hide questions from candidate view
-  if(!S.questionVisible && !S.adminMode){
-    card.classList.add("hidden");
-    return;
-  }
-  // No URL configured at all
-  if(!S.questionLoading && !S.question && !S.questionHtml && S.questionError === "Set QUESTIONS_URL in .env"){
-    card.classList.add("hidden");
-    return;
-  }
-  card.classList.remove("hidden");
-  if(S.questionLoading){
-    box.innerHTML=`<span class="question-loading">Loading interview question...</span>`;
-    return;
-  }
-  if(S.questionError && !S.question && !S.questionHtml){
-    box.innerHTML=`<div class="question-error">${esc(S.questionError)}</div>`;
-    return;
-  }
-  if(!S.question && !S.questionHtml){
-    card.classList.add("hidden");
-    return;
-  }
-  if(!S.questionVisible){
-    box.innerHTML=`<span class="question-loading" style="color:var(--orange)">Question hidden from candidate. Toggle visibility below.</span>`;
-    return;
-  }
-  if(S.questionHtml){
-    box.innerHTML = S.questionHtml;
-    return;
-  }
-  box.innerHTML = formatQuestion(S.question);
-}
-
-function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
-
-function formatQuestion(text){
-  const lines = text.split("\n");
-  let html = "";
-  let inTable = false;
-  
-  for(let i=0;i<lines.length;i++){
-    const line = lines[i];
-    const trimmed = line.trim();
-    if(!trimmed){ if(inTable){inTable=false;html+="</div>"} html+="<br>"; continue; }
-    
-    // Detect table rows (lines with Tab separators like "Item\tDetails")
-    if(trimmed.includes("\t") && trimmed.split("\t").length === 2){
-      const [k,v] = trimmed.split("\t");
-      if(!inTable){inTable=true;html+=`<div class="q-table">`}
-      html+=`<div class="q-table-cell q-table-head">${esc(k.trim())}</div><div class="q-table-cell">${esc(v.trim())}</div>`;
-      continue;
-    }
-    if(inTable){inTable=false;html+="</div>"}
-    
-    // Detect headers: short lines followed by content, or lines ending with ":"
-    const isHeader = (
-      (trimmed.length < 60 && trimmed === trimmed.replace(/[a-z]/g,"")) ||
-      (trimmed.length < 80 && !trimmed.endsWith(".") && !trimmed.startsWith("●") && !trimmed.startsWith("-") && !trimmed.startsWith("•") &&
-       i+1 < lines.length && lines[i+1].trim().length > 0 && 
-       (trimmed.endsWith(":") || /^[A-Z][A-Za-z &,]+$/.test(trimmed) || /^[A-Z][A-Za-z ]+[A-Za-z]$/.test(trimmed)))
-    );
-    
-    if(isHeader){
-      html+=`<h4>${esc(trimmed.replace(/:$/,""))}</h4>`;
-      continue;
-    }
-    
-    if(trimmed.startsWith("●") || trimmed.startsWith("•") || trimmed.startsWith("- ")){
-      const content = trimmed.replace(/^[●•\-]\s*/, "");
-      html+=`<div class="q-item">${esc(content)}</div>`;
-      continue;
-    }
-    
-    html+=`<div class="q-section">${esc(trimmed)}</div>`;
-  }
-  if(inTable) html+="</div>";
-  return html;
-}
-
-function renderIDEs(){
-  const g=$("ide-buttons");if(g.children.length)return;
-  if(!S.ides || S.ides.length === 0){
-    g.innerHTML=`<p style="color:var(--muted);font-size:13px;">No supported IDE detected. Install VS Code, Cursor, or Windsurf.</p>`;
-    return;
-  }
-  const subtitle={local:"Open in Dev Container","code-server":"VS Code in your browser",url:"Open in browser",instruction:"Setup instructions"};
-  S.ides.forEach(ide=>{
-    const b=document.createElement("button");
-    b.className="ide-btn";
-    b.innerHTML=`${esc(ide.name)}<small>${esc(ide.note||subtitle[ide.kind]||"")}</small>`;
-    b.onclick=()=>launchIDE(ide.name);g.appendChild(b);
-  });
-}
-
-async function launchIDE(name){
-  const res=await fetch("/api/launch",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ide:name})});
-  const d=await res.json();if(d.url)window.open(d.url,"_blank");if(d.instruction)alert(d.instruction);
-}
-
-function renderTimer(){
-  const t=S.timer;if(!t)return;
-  $("timer-display").textContent=fmt(t.active);
-  $("t-active").textContent=fmt(t.active);$("t-idle").textContent=fmt(t.idle);
-  $("t-limit").textContent=fmt(t.limitSecs);$("t-action").textContent=t.action;
-  $("timer-wrap").classList.toggle("expired",!!t.expired);
-  $("timer-wrap").classList.toggle("idle",!!t.idleNow);
-}
-function onExpired(msg){$("timer-alert").textContent=msg.message;$("timer-alert").classList.remove("hidden")}
-
-function renderAdmin(){
-  const c=S.config||{};const f=$("admin-features");
-  const defs=[
-    {key:"ENABLE_TIMER",label:"Session Timer",desc:"Track active/idle time with enforcement options"},
-    {key:"ENABLE_TELEMETRY",label:"Telemetry",desc:"Export AI usage, shell history, and Git activity"},
-  ];
-  if(!f.children.length){
-    defs.forEach(d=>{
-      const row=document.createElement("div");row.className="config-row";
-      row.innerHTML=`<div class="config-label">${d.label}<small>${d.desc}</small></div>
-        <div class="toggle ${c[d.key]==="true"?"on":""}" data-key="${d.key}"></div>`;
-      row.querySelector(".toggle").onclick=e=>toggleFeature(e.currentTarget,d.key);
-      f.appendChild(row);
-    });
-  }else{f.querySelectorAll(".toggle").forEach(el=>el.classList.toggle("on",c[el.dataset.key]==="true"))}
-  $("timer-config").classList.toggle("hidden",c.ENABLE_TIMER!=="true");
-  if(c.ENABLE_TIMER==="true"){
-    $("cfg-action").value=c.TIMEOUT_ACTION||"NOTIFY";
-    $("cfg-limit").value=c.TIME_LIMIT_MINUTES||"60";
-    $("cfg-inactivity").value=c.INACTIVITY_TIMEOUT_MINUTES||"10";
-  }
-
-  const aq=$("admin-question");
-  if(S.question || S.questionLoading){
-    aq.classList.remove("hidden");
-    let html = "";
-    if(S.questionLoading){
-      html=`<div class="assigned-question"><div style="color:var(--muted)">Loading question...</div></div>`;
-    }else if(S.question){
-      html=`<div class="assigned-question">
-        <div class="aq-title">${esc(S.question)}</div>
-        <div class="aq-note">Randomly assigned. Visible to candidate: <strong>${S.questionVisible?"Yes":"No"}</strong></div>
-        <div style="display:flex;gap:8px;margin-top:10px;">
-          <button class="save-btn" onclick="rerollQuestion()">Reroll</button>
-          <button class="save-btn" onclick="toggleQuestionVisibility()">${S.questionVisible?"Hide from candidate":"Show to candidate"}</button>
-        </div>
-      </div>`;
-    }
-    $("assigned-question").innerHTML=html;
-  }else{
-    aq.classList.add("hidden");
+function go(dest){
+  switch(dest){
+    case'log':ui.logView=true;render();break;
+    case'back':ui.logView=false;ui.help=null;render();break;
+    case'troubleshoot':ui.help='troubleshoot';render();break;
+    case'manual':ui.help='manual';render();break;
+    case'retry':location.reload();break;
+    case'end':ui.localComplete=true;render();break;
+    case'remove':endInterview();break;
+    case'reset':adminReset();break;
+    case'endevent':adminEndEvent();break;
+    case'shutdown':adminShutdown();break;
+    case'reroll':rerollQuestion();break;
+    case'qtoggle':toggleQuestionVisibility();break;
   }
 }
 
-// Admin auth: privileged calls (config/reroll/reset) require a short-lived
-// bearer token minted by a native OS admin challenge.
-let adminToken=null;
-async function ensureAuth(){
-  if(adminToken)return adminToken;
-  const r=await fetch("/api/auth",{method:"POST"});
-  if(!r.ok)throw new Error("Admin authentication required");
-  adminToken=(await r.json()).token;return adminToken;
-}
+// ── Actions ──────────────────────────────────────────────────────────────────
+async function ensureAuth(){if(!adminToken)throw new Error('locked');return adminToken}
 async function authedFetch(url,opts={}){
-  let t=await ensureAuth();
-  opts.headers={...(opts.headers||{}),"Authorization":"Bearer "+t};
-  let res=await fetch(url,opts);
-  if(res.status===401){adminToken=null;t=await ensureAuth();opts.headers.Authorization="Bearer "+t;res=await fetch(url,opts);}
+  const t=await ensureAuth();
+  opts.headers={...(opts.headers||{}),'Authorization':'Bearer '+t};
+  const res=await fetch(url,opts);
+  if(res.status===401){adminToken=null;adminCfg=null;ui.unlocked=false;render();throw new Error('expired')}
   return res;
 }
-
-async function toggleFeature(el,key){
-  const on=el.classList.toggle("on");S.config={...S.config,[key]:on?"true":"false"};renderAdmin();
+async function unlock(){
+  const pw=($('pw')||{}).value||'';
+  const err=$('gerr'); if(err)err.textContent='';
   try{
-    await authedFetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(S.config)});
-  }catch(_){
-    el.classList.toggle("on");S.config={...S.config,[key]:on?"false":"true"};renderAdmin();
+    const r=await fetch('/api/admin-unlock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
+    const d=await r.json();
+    if(r.ok&&d.token){adminToken=d.token;ui.unlocked=true;render();loadAdminCfg()}
+    else if(err)err.textContent=d.error||'Incorrect password.';
+  }catch(_){if(err)err.textContent='Unlock failed.'}
+}
+async function loadAdminCfg(){
+  try{const r=await authedFetch('/api/admin/config');adminCfg=await r.json();render()}catch(_){}
+}
+async function launchIDE(name){
+  try{
+    const r=await fetch('/api/launch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ide:name})});
+    const d=await r.json();
+    if(d.url)window.open(d.url,'_blank');
+    if(d.instruction)alert(d.instruction);
+  }catch(_){}
+}
+async function openTerminal(el){
+  try{
+    const r=await fetch('/api/open-terminal',{method:'POST'});
+    const d=await r.json();
+    if(!d.ok&&d.command){
+      const note=document.createElement('div');note.className='qc';note.style.marginTop='10px';
+      note.textContent=d.command;el.parentNode.appendChild(note);
+    }
+  }catch(_){}
+}
+async function runFix(id,el){
+  const label=el?el.innerHTML:'';
+  if(el){el.disabled=true;el.innerHTML='<i class="ti ti-loader"></i>Opening…'}
+  try{
+    const r=await fetch('/api/run-fix',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
+    const d=await r.json();
+    if(el){el.disabled=false;el.innerHTML=label}
+    if(!d.ok&&el){
+      const note=document.createElement('div');note.className='qc al';note.style.cssText='margin:8px 0 0 32px';
+      note.textContent=(d.reason||'Could not open a terminal.')+(d.command?'  Run it yourself: '+d.command:'');
+      el.parentNode.appendChild(note);
+    }
+  }catch(_){if(el){el.disabled=false;el.innerHTML=label}}
+}
+async function setAppearance(key,val){
+  S.appearance={...S.appearance,[key]:val};
+  applyTokens();render();
+  try{await authedFetch('/api/appearance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({[key]:val})})}catch(_){}
+}
+function currentEnabledEditors(){return [...(S.enabledEditors||[])]}
+async function toggle(key){
+  if(key==='term'){await saveConfig({TERMINAL_ACCESS:S.terminalEnabled?'false':'true'});return}
+  if(key==='timer'){await saveConfig({ENABLE_TIMER:(S.config.ENABLE_TIMER==='true')?'false':'true'});return}
+  if(key.startsWith('ed:')){
+    const name=key.slice(3);
+    let set=currentEnabledEditors();
+    set=set.includes(name)?set.filter(n=>n!==name):set.concat(name);
+    await saveConfig({ENABLED_EDITORS:set.join(',')});
   }
 }
-
-async function saveTimerConfig(){
-  const cfg={...S.config,TIMEOUT_ACTION:$("cfg-action").value,
-    TIME_LIMIT_MINUTES:$("cfg-limit").value,INACTIVITY_TIMEOUT_MINUTES:$("cfg-inactivity").value};
+async function saveConfig(patch){
+  const cfg={...S.config,...patch};
   S.config=cfg;
-  let res;
-  try{res=await authedFetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(cfg)});}
-  catch(_){return;}
-  const d=await res.json();
-  if(d.saved){const b=document.querySelector(".save-btn");b.textContent="Saved";b.style.borderColor="var(--accent)";
-    setTimeout(()=>{b.textContent="Save";b.style.borderColor=""},1500)}
+  if('ENABLED_EDITORS' in patch) S.enabledEditors=(patch.ENABLED_EDITORS||'').split(',').map(s=>s.trim()).filter(Boolean);
+  if('TERMINAL_ACCESS' in patch) S.terminalEnabled=patch.TERMINAL_ACCESS!=='false';
+  render();
+  try{await authedFetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)})}catch(_){}
 }
-
-function renderTelemetry(data){
-  $("admin-telemetry").classList.remove("hidden");
-  const sh=(data.shellHistory||"").split("\n").filter(l=>l.trim()).length;
-  const gi=(data.gitLog||"").split("\n").filter(l=>l.trim()).length;
-  const fi=(data.files||"").split("\n").filter(l=>l.trim()).length;
-  $("telemetry-stats").innerHTML=`
-    <div class="stat"><div class="stat-val">${sh}</div><div class="stat-lbl">Shell commands</div></div>
-    <div class="stat"><div class="stat-val">${gi}</div><div class="stat-lbl">Git commits</div></div>
-    <div class="stat"><div class="stat-val">${fi}</div><div class="stat-lbl">Files created</div></div>`;
+async function saveSource(url){
+  if(!adminCfg)adminCfg={};
+  if(url===(adminCfg.QUESTIONS_URL||''))return;
+  adminCfg.QUESTIONS_URL=url;
+  if(url){S.questionLoading=true;S.question=null;S.questionHtml=null}
+  render();
+  try{await authedFetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({QUESTIONS_URL:url})})}catch(_){}
 }
-
-async function rerollQuestion(){
-  try{
-    await authedFetch("/api/reroll",{method:"POST"});
-  }catch(_){return;}
-  S.questionLoading=true;S.question=null;S.questionHtml=null;
-  renderQuestion();renderAdmin();
-}
-
-async function toggleQuestionVisibility(){
-  await fetch("/api/question-toggle",{method:"POST"});
-}
-
-function renderIssues(issues){
-  if(!issues||!issues.length)return;
-  const box=document.createElement("div");
-  issues.forEach(i=>{const d=document.createElement("div");d.className="issue";d.textContent=i;box.appendChild(d)});
-  $("progress-steps").after(box);
-}
-
+async function rerollQuestion(){try{await authedFetch('/api/reroll',{method:'POST'});S.questionLoading=true;S.question=null;S.questionHtml=null;render()}catch(_){}}
+async function toggleQuestionVisibility(){try{await fetch('/api/question-toggle',{method:'POST'})}catch(_){}}
 async function endInterview(){
-  if(!confirm("End the interview and remove everything from this machine?"))return;
-  $("btn-end").disabled=true;$("btn-reset").disabled=true;
-
-  $("progress-steps").innerHTML="";
-  currentPct=0;setProgress(0);
-  await fetch("/api/cleanup",{method:"POST"});
+  ui.localComplete=false;
+  try{await fetch('/api/cleanup',{method:'POST'})}catch(_){}
 }
-
 async function adminReset(){
-  if(!confirm("Run full host teardown? This will:\n\n- Wipe all browsers and cached logins\n- Purge keychain/credential entries\n- Scrub IDE state and shell history\n- Destroy and rebuild the container\n\nYou will be prompted for your admin password."))return;
-  let res;
-  try{res=await authedFetch("/api/reset",{method:"POST"});}
-  catch(_){return;}
-  if(!res.ok)return;
-  $("btn-end").disabled=true;$("btn-reset").disabled=true;
-  $("progress-steps").innerHTML="";
-  $("ide-buttons").innerHTML="";
-  S.question=null;S.questionHtml=null;S.questionLoading=true;S.questionVisible=true;
-  currentPct=0;setProgress(0);
-  renderQuestion();
+  if(!confirm('Reset this workstation for the next candidate? This scrubs the host and rebuilds the environment.'))return;
+  try{await authedFetch('/api/reset',{method:'POST'});ui.tab='reset';render()}catch(_){}
+}
+async function adminEndEvent(){
+  if(!confirm('End the interview event and tear down this workstation?'))return;
+  try{await authedFetch('/api/end-event',{method:'POST'});ui.tab='reset';render()}catch(_){}
+}
+async function adminShutdown(){
+  if(!confirm('Shut down this machine now?'))return;
+  try{await authedFetch('/api/shutdown',{method:'POST'})}catch(_){}
 }
 
-connect();
-fetch("/api/state").then(r=>r.json()).then(s=>{S=s;render()});
+// ── Build log streaming ──────────────────────────────────────────────────────
+function logTime(ts){const d=ts?new Date(ts):new Date();return d.toTimeString().slice(0,8)}
+function appendLogLine(level,msg){
+  const strm=$('strm');if(!strm)return;
+  const l=document.createElement('div');l.className='sl';
+  l.innerHTML='<span class="stm">'+logTime()+'</span><span class="v-'+level+'">'+(level==='step'?'▸ ':'  ')+esc(msg)+'</span>';
+  strm.appendChild(l);strm.scrollTop=strm.scrollHeight;
+}
+async function populateLog(){
+  const strm=$('strm');if(!strm)return;
+  try{
+    const r=await fetch('/api/build-log');const d=await r.json();
+    strm.innerHTML='';
+    (d.entries||[]).forEach(e=>{
+      const l=document.createElement('div');l.className='sl';
+      l.innerHTML='<span class="stm">'+logTime(e.ts)+'</span><span class="v-'+e.level+'">'+(e.level==='step'?'▸ ':'  ')+esc(e.msg)+'</span>';
+      strm.appendChild(l);
+    });
+    strm.scrollTop=strm.scrollHeight;
+  }catch(_){}
+}
 
-// Activity heartbeat: flag real interaction, then report at most once every 15s
-// so the server can distinguish active time from idle time.
+// ── WebSocket / state ────────────────────────────────────────────────────────
+const STEP_LEVEL={warning:'warn',error:'err'};
+function handle(msg){
+  switch(msg.type){
+    case'init':S=msg.state;applyTokens();render();break;
+    case'status':S.status=msg.status;if(msg.status!=='ready')ui.localComplete=false;render();break;
+    case'step':{const ex=(S.steps||[]).find(s=>s.id===msg.id);if(ex){ex.label=msg.label;ex.status=msg.status}else{(S.steps=S.steps||[]).push({id:msg.id,label:msg.label,status:msg.status})}appendLogLine(STEP_LEVEL[msg.status]||'step',msg.label);if(msg.status==='running')prog.op=msg.label;const onLog=ui.logView||(curView()==='admin'&&ui.tab==='log');if(!onLog)render();break}
+    case'progress':prog.pct=msg.pct;prog.phase=msg.phase;updateProgressDom();break;
+    case'log':appendLogLine('info',msg.line);break;
+    case'clear_steps':S.steps=[];render();break;
+    case'question':S.question=msg.text;S.questionHtml=msg.html;S.questionError=msg.error;S.questionPdf=msg.pdf||null;S.questionLoading=false;render();break;
+    case'question_loading':S.questionLoading=true;render();break;
+    case'question_visibility':S.questionVisible=msg.visible;render();break;
+    case'timer':S.timer=msg;updateTimerDom();break;
+    case'timer_expired':break;
+    case'timer_stopped':S.timer=null;render();break;
+    case'cleanup_complete':S.status='done';render();break;
+    case'config':S.config=msg.config;render();break;
+    case'appearance':S.appearance=msg.appearance;applyTokens();if(curView()==='admin'&&ui.tab==='settings')render();break;
+    case'validation':break;
+    case'validation_locked':S.validationLocked=true;render();break;
+    case'event_complete':S.eventComplete=msg.info;S.status='event_complete';render();break;
+  }
+}
+// Light DOM patches that avoid a full re-render on high-frequency messages.
+function updateProgressDom(){
+  const f=document.querySelector('.track .f');if(f)f.style.width=Math.max(0,Math.min(100,prog.pct))+'%';
+  const big=document.querySelector('.big');if(big)big.innerHTML=prog.pct+'<span class="pc">%</span>';
+}
+function updateTimerDom(){
+  // Timer wording lives in the question header label; cheap to re-render that screen.
+  if(S.status==='ready'&&!ui.localComplete&&curView()!=='admin'&&!ui.logView&&!ui.help)render();
+}
+
+function connect(){
+  const ws=new WebSocket((location.protocol==='https:'?'wss:':'ws:')+'//'+location.host);
+  ws.onmessage=e=>handle(JSON.parse(e.data));
+  ws.onclose=()=>setTimeout(connect,2000);
+}
+connect();
+fetch('/api/state').then(r=>r.json()).then(s=>{S=s;applyTokens();render()}).catch(()=>render());
+
+// Activity heartbeat: flag real interaction, report at most every 15s.
 let activitySeen=false;
-["mousemove","keydown","click","scroll","touchstart"].forEach(ev=>
-  window.addEventListener(ev,()=>{activitySeen=true},{passive:true}));
-setInterval(()=>{
-  if(!activitySeen)return;
-  activitySeen=false;
-  fetch("/api/activity",{method:"POST"}).catch(()=>{});
-},15000);
+['mousemove','keydown','click','scroll','touchstart'].forEach(ev=>window.addEventListener(ev,()=>{activitySeen=true},{passive:true}));
+setInterval(()=>{if(!activitySeen)return;activitySeen=false;fetch('/api/activity',{method:'POST'}).catch(()=>{})},15000);
+
+if(mq&&mq.addEventListener)mq.addEventListener('change',()=>{if(!sessionTheme&&(S.appearance&&S.appearance.theme==='system'))render()});
+
+render();
 </script>
 </body>
 </html>

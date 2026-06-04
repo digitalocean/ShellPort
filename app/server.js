@@ -51,6 +51,30 @@ const ADMIN_MODE = fs.existsSync(path.join(ROOT, "admin"));
 // DO-owned interview station (admin marker present, aggressive host scrub allowed)
 // vs candidate BYOD (no marker — only ShellPort's own footprint may be removed).
 const MACHINE_TYPE = ADMIN_MODE ? "do" : "byod";
+// Managed (DO station, candidate-facing) exposes a password-gated admin panel;
+// candidate (BYOD) never does.
+const VIEW_MODE = ADMIN_MODE ? "managed" : "candidate";
+
+// Admin-set appearance preset, inherited by candidate/managed screens.
+const APPEARANCE_FILE = path.join(ROOT, ".appearance.json");
+const APPEARANCE_DEFAULTS = { theme: "system", accent: "cerulean", font: "sans" };
+const APPEARANCE_ENUMS = {
+  theme: ["system", "light", "dark"],
+  accent: ["cerulean", "foam", "kelp", "tentacle", "violet", "mono"],
+  font: ["sans", "grotesk", "editorial"],
+};
+function loadAppearance() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(APPEARANCE_FILE, "utf8"));
+    const out = {};
+    for (const k of Object.keys(APPEARANCE_DEFAULTS)) {
+      out[k] = APPEARANCE_ENUMS[k].includes(raw[k]) ? raw[k] : APPEARANCE_DEFAULTS[k];
+    }
+    return out;
+  } catch (_) {
+    return { ...APPEARANCE_DEFAULTS };
+  }
+}
 
 let state = {
   status: "initializing",
@@ -67,13 +91,36 @@ let state = {
   snapshot: null,
   adminMode: ADMIN_MODE,
   machineType: MACHINE_TYPE,
+  mode: VIEW_MODE,
+  adminAvailable: ADMIN_MODE,
+  appearance: loadAppearance(),
+  enabledEditors: [],
+  terminalEnabled: true,
   validationLocked: false,
   eventComplete: null,
   error: null,
 };
 
 const clients = new Set();
+
+// Read-only build/reset log. Every operation line is captured here so the log
+// view can replay history on open and stream live after. level ∈ ok|info|warn|err|step.
+const buildLog = [];
+const BUILD_LOG_MAX = 600;
+function recordLog(level, msg) {
+  buildLog.push({ ts: Date.now(), level, msg });
+  if (buildLog.length > BUILD_LOG_MAX) buildLog.shift();
+}
+function stepLevel(status) {
+  if (status === "warning") return "warn";
+  if (status === "error") return "err";
+  return "step";
+}
+
 function broadcast(msg) {
+  if (msg.type === "log") recordLog("info", msg.line);
+  else if (msg.type === "step") recordLog(stepLevel(msg.status), msg.label);
+  else if (msg.type === "clear_steps") buildLog.length = 0;
   const data = JSON.stringify(msg);
   clients.forEach((ws) => { try { ws.send(data); } catch (_) {} });
 }
@@ -132,8 +179,12 @@ function loadEnv() {
     PROJECT_NAME: "",
     QUESTIONS_URL: "",
     QUESTION_ROW: "",
+    QUESTION_TAB: "",
     QUESTION_WEBHOOK: "",
     MACHINE_LABEL: "",
+    ENABLED_EDITORS: "",
+    TERMINAL_ACCESS: "true",
+    QUESTION_DELIVERY: "auto",
   };
   if (fs.existsSync(envPath)) {
     fs.readFileSync(envPath, "utf8").split("\n").forEach((line) => {
@@ -153,6 +204,15 @@ function loadEnv() {
   }
   state.config = config;
   return config;
+}
+
+// Derive the wire-facing editor/terminal fields from config + detected IDEs.
+// ENABLED_EDITORS is a comma list of allowed local editors; empty = all detected.
+function deriveEditorAccess() {
+  const local = state.ides.filter((i) => i.kind === "local").map((i) => i.name);
+  const allow = (state.config.ENABLED_EDITORS || "").split(",").map((s) => s.trim()).filter(Boolean);
+  state.enabledEditors = allow.length ? local.filter((n) => allow.includes(n)) : local;
+  state.terminalEnabled = (state.config.TERMINAL_ACCESS || "true") !== "false";
 }
 
 // Shell exec with streaming and build progress parsing
@@ -253,7 +313,7 @@ function detectIDEs() {
   }
 
   // Web options — always available, no local install required.
-  ides.push({ name: "Browser", kind: "code-server", note: "VS Code in your browser, from the container" });
+  ides.push({ name: "vscode.dev", kind: "url", url: "https://vscode.dev", note: "VS Code for the web" });
   ides.push({ name: "github.dev", kind: "url", url: "https://github.dev", note: "VS Code for the web on GitHub" });
   ides.push({ name: "GitHub Codespaces", kind: "url", url: "https://github.com/codespaces/new", note: "Cloud dev container" });
   ides.push({ name: "DevPod", kind: "instruction", instruction: "Open DevPod, add this folder as a workspace, and it will build from the committed devcontainer.json." });
@@ -281,6 +341,63 @@ async function captureSnapshot() {
   addStep("snapshot", "Pre-install state captured", "done");
 }
 
+// Strip Google's export-HTML chrome down to a clean fragment we can render inline.
+function cleanDocHtml(htmlRaw) {
+  if (!htmlRaw || !htmlRaw.includes("<body")) return null;
+  let body = htmlRaw;
+  const bodyMatch = htmlRaw.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  if (bodyMatch) body = bodyMatch[1];
+  return body
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<a[^>]*href="https?:\/\/www\.google\.com\/url\?q=([^&"]+)[^"]*"/gi, '<a href="$1"')
+    .replace(/style="[^"]*"/gi, "")
+    .replace(/class="[^"]*"/gi, "")
+    // Strip span wrappers regardless of leftover attributes; after class/style
+    // removal Google emits <span > tags that a bare /<span>/ would miss.
+    .replace(/<\/?span[^>]*>/gi, "")
+    .replace(/<p[^>]*>\s*<\/p>/gi, "")
+    .trim();
+}
+
+// Render a single Google Doc (optionally one tab) as the assigned question:
+// export a PDF copy for the in-page reader, and clean HTML for the inline view.
+async function renderDocQuestion(docId, tab) {
+  const tabParam = tab ? `&tab=${encodeURIComponent(tab)}` : "";
+  addStep("question", "Loading formatted question", "running");
+
+  // PDF copy for the in-page reader / remote handoff.
+  try {
+    const pdfResp = await httpRequest(`https://docs.google.com/document/d/${docId}/export?format=pdf${tabParam}`, { binary: true });
+    if (pdfResp.status < 400 && Buffer.isBuffer(pdfResp.body) && pdfResp.body.length > 1000
+        && pdfResp.body.slice(0, 4).toString() === "%PDF") {
+      fs.writeFileSync(path.join(ROOT, "question.pdf"), pdfResp.body);
+      state.questionPdf = "/api/question.pdf";
+    }
+  } catch (_) { state.questionPdf = null; }
+
+  const docResp = await httpRequest(`https://docs.google.com/document/d/${docId}/export?format=html${tabParam}`);
+  const raw = docResp.body || "";
+  const body = cleanDocHtml(raw);
+
+  // Title from the doc's Title-styled paragraph (Google exports it as a
+  // <p class="...title...">, not an <h1>), then the first heading, then generic.
+  let title = "Interview question";
+  const titleP = raw.match(/<p[^>]*class="[^"]*\btitle\b[^"]*"[^>]*>([\s\S]*?)<\/p>/i);
+  const head = raw.match(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/i);
+  const titleText = (titleP && titleP[1].replace(/<[^>]+>/g, "").trim())
+    || (head && head[1].replace(/<[^>]+>/g, "").trim());
+  if (titleText) title = titleText;
+
+  const locator = tab ? `tab ${tab}` : "whole doc";
+  state.question = title;
+  state.questionHtml = body;
+  state.questionLoading = false;
+  addStep("question", `Assigned: ${title} (${locator})`, "done");
+  broadcast({ type: "question", html: body, text: title, pdf: state.questionPdf, error: null });
+  broadcast({ type: "log", line: `[question] Assigned: ${title} (${locator})` });
+  fireQuestionWebhook(title, locator);
+}
+
 // Fetch interview question (always runs, not behind a toggle)
 // QUESTION_ROW overrides random selection. Webhook fires either way.
 async function fetchQuestion() {
@@ -298,6 +415,19 @@ async function fetchQuestion() {
   }
 
   try {
+    // Google Docs URL → single doc. Each question lives in its own tab; the
+    // assigned tab comes from the URL (?tab=t.xxx) or is pinned via QUESTION_TAB.
+    // This lets the team keep one living doc of questions, off-repo, and assign a
+    // tab per station without maintaining a separate index sheet.
+    const docsMatch = url.match(/docs\.google\.com\/document\/d\/([a-zA-Z0-9_-]+)/);
+    if (docsMatch) {
+      let tab = (state.config.QUESTION_TAB || "").trim();
+      const urlTab = url.match(/[?&]tab=(t\.[a-zA-Z0-9_-]+)/);
+      if (urlTab) tab = urlTab[1];
+      await renderDocQuestion(docsMatch[1], tab);
+      return;
+    }
+
     // Google Sheets URL → TSV export
     const sheetsMatch = url.match(/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
     if (sheetsMatch) {
@@ -346,29 +476,16 @@ async function fetchQuestion() {
       } catch (_) { state.questionPdf = null; }
 
       const docResp = await httpRequest(`https://docs.google.com/document/d/${docId}/export?format=html`);
-      const htmlRaw = docResp.body || "";
+      const body = cleanDocHtml(docResp.body || "");
 
-      if (htmlRaw && htmlRaw.includes("<body")) {
-        let body = htmlRaw;
-        const bodyMatch = htmlRaw.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-        if (bodyMatch) body = bodyMatch[1];
-        
-        body = body
-          .replace(/<style[\s\S]*?<\/style>/gi, "")
-          .replace(/style="[^"]*"/gi, "")
-          .replace(/class="[^"]*"/gi, "")
-          .replace(/<span>/gi, "").replace(/<\/span>/gi, "")
-          .replace(/<p><\/p>/gi, "")
-          .replace(/<a[^>]*href="https?:\/\/www\.google\.com\/url\?q=([^&"]+)[^"]*"/gi, '<a href="$1"')
-          .trim();
-
+      if (body) {
         state.question = title;
         state.questionHtml = body;
         state.questionLoading = false;
         addStep("question", `Assigned: ${title} (row ${sheetRow})`, "done");
         broadcast({ type: "question", html: body, text: title, pdf: state.questionPdf, error: null });
         broadcast({ type: "log", line: `[question] Assigned: ${title} (row ${sheetRow})` });
-        fireQuestionWebhook(title, sheetRow);
+        fireQuestionWebhook(title, `row ${sheetRow}`);
         return;
       }
     }
@@ -380,7 +497,7 @@ async function fetchQuestion() {
     addStep("question", `Assigned: ${title} (row ${sheetRow})`, "done");
     broadcast({ type: "question", html: null, text: title, pdf: state.questionPdf, error: null });
     broadcast({ type: "log", line: `[question] Assigned: ${title} (row ${sheetRow})` });
-    fireQuestionWebhook(title, sheetRow);
+    fireQuestionWebhook(title, `row ${sheetRow}`);
 
   } catch (err) {
     state.questionLoading = false;
@@ -389,8 +506,9 @@ async function fetchQuestion() {
   }
 }
 
-// Webhook notification — fires every time a question is assigned
-async function fireQuestionWebhook(title, row) {
+// Webhook notification — fires every time a question is assigned.
+// `source` is a human-readable locator: a sheet row ("row 4") or a doc tab ("tab t.ab12").
+async function fireQuestionWebhook(title, source) {
   const webhookUrl = (state.config.QUESTION_WEBHOOK || "").trim();
   if (!webhookUrl) return;
 
@@ -398,11 +516,11 @@ async function fireQuestionWebhook(title, row) {
   const serial = await getMachineSerial();
   const label = (state.config.MACHINE_LABEL || "").trim() || `${hostname} (${serial})`;
   const project = (state.config.PROJECT_NAME || "").trim() || "—";
-  const mode = state.config.QUESTION_ROW ? "pre-assigned" : "random";
+  const mode = (state.config.QUESTION_ROW || state.config.QUESTION_TAB) ? "pre-assigned" : "random";
   const ts = new Date().toLocaleString("en-US", { timeZone: "America/Denver", hour12: true, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
   const payload = JSON.stringify({
-    text: `ShellPort: ${label} → ${title} (row ${row}, ${mode})`,
+    text: `ShellPort: ${label} → ${title} (${source}, ${mode})`,
     blocks: [
       {
         type: "section",
@@ -414,7 +532,7 @@ async function fireQuestionWebhook(title, row) {
             `*Machine:* ${label}`,
             `*Serial:* ${serial}`,
             `*Question:* ${title}`,
-            `*Row:* ${row}  |  *Mode:* ${mode}`,
+            `*Source:* ${source}  |  *Mode:* ${mode}`,
             `*Project:* ${project}`,
             `*Time:* ${ts}`,
           ].join("\n")
@@ -502,6 +620,33 @@ function authenticateAdmin() {
   });
 }
 
+// Verify a typed password against the current OS user account, non-interactively.
+// Managed stations are provisioned so candidates never hold this password, so it
+// is an OS-strength gate. Linux can't verify a typed password without root, so it
+// falls back to the native admin prompt (the typed value is ignored there).
+function verifyOsPassword(password) {
+  return new Promise((resolve) => {
+    if (!password && process.platform !== "linux") return resolve(false);
+    const user = require("os").userInfo().username;
+    if (process.platform === "darwin") {
+      // Args (not a shell string) so the password is never interpolated/quoted.
+      const p = spawn("dscl", [".", "-authonly", user, password]);
+      p.on("close", (code) => resolve(code === 0));
+      p.on("error", () => resolve(false));
+    } else if (IS_WIN) {
+      // Password handed to PowerShell via the environment, never argv or the script body.
+      const ps = "Add-Type -AssemblyName System.DirectoryServices.AccountManagement;"
+        + "$c=New-Object System.DirectoryServices.AccountManagement.PrincipalContext('Machine');"
+        + "if($c.ValidateCredentials($env:USERNAME,$env:SP_PW)){exit 0}else{exit 1}";
+      const p = spawn("powershell", ["-NoProfile", "-Command", ps], { env: { ...process.env, SP_PW: password } });
+      p.on("close", (code) => resolve(code === 0));
+      p.on("error", () => resolve(false));
+    } else {
+      authenticateAdmin().then(resolve).catch(() => resolve(false));
+    }
+  });
+}
+
 // Command an admin runs to remove ShellPort entirely (BYOD self-uninstall).
 function uninstallCommand() {
   return IS_WIN
@@ -566,6 +711,7 @@ async function setup() {
   updateStatus("setup");
   loadEnv();
   detectIDEs();
+  deriveEditorAccess();
   resetProgress("setup");
   state.validationLocked = false;
   state.eventComplete = null;
@@ -693,16 +839,6 @@ async function launchIDE(ideName) {
       return { launched: ideName };
     }
 
-    case "code-server": {
-      // Start code-server inside the container (idempotent) and hand back the URL.
-      const start = `nohup code-server --bind-addr 0.0.0.0:8080 --auth none /workspaces > /tmp/code-server.log 2>&1 & disown`;
-      await run(
-        `docker compose exec -d interview-env bash -lc "pgrep -f 'code-server' >/dev/null || (${start})"`,
-        { cwd: ROOT }
-      ).catch(() => {});
-      return { launched: ideName, url: "http://localhost:8080" };
-    }
-
     case "url":
       return { launched: ideName, url: ide.url };
 
@@ -712,6 +848,101 @@ async function launchIDE(ideName) {
     default:
       throw new Error(`Unknown IDE kind: ${ide.kind}`);
   }
+}
+
+// Open a native terminal window running `inner` (bash syntax on macOS/Linux,
+// PowerShell on Windows). `manual` is the copy/paste command returned to the UI
+// as a fallback when no terminal could be launched.
+function spawnTerminal(inner, manual) {
+  manual = manual || inner;
+  return new Promise((resolve) => {
+    const ok = () => resolve({ ok: true });
+    const fail = (reason) => resolve({ ok: false, reason, command: manual });
+    if (process.platform === "darwin") {
+      const hasITerm = fs.existsSync("/Applications/iTerm.app");
+      const appCmd = hasITerm
+        ? "osascript -e 'tell application \"iTerm\" to create window with default profile command \"bash -lc \\\"" + inner.replace(/"/g, '\\\\\\"') + "\\\"\"' -e 'tell application \"iTerm\" to activate'"
+        : "osascript -e 'tell application \"Terminal\" to do script \"" + inner.replace(/"/g, '\\\\"') + "\"' -e 'tell application \"Terminal\" to activate'";
+      run(appCmd).then(ok).catch(() => fail("Could not open Terminal"));
+    } else if (IS_WIN) {
+      const wtCmd = "wt -d \"" + ROOT + "\" pwsh -NoExit -Command \"" + inner.replace(/"/g, '\\"') + "\"";
+      const fallback = "start powershell -NoExit -Command \"" + inner.replace(/"/g, '\\"') + "\"";
+      run(wtCmd).then(ok).catch(() => run(fallback).then(ok).catch(() => fail("No terminal found")));
+    } else {
+      const emus = ["gnome-terminal", "konsole", "xterm", "x-terminal-emulator"];
+      const found = emus.find((e) => findBin([], [e]));
+      if (!found) return fail("No terminal emulator found");
+      const cmd = found === "gnome-terminal"
+        ? "gnome-terminal -- bash -c '" + inner.replace(/'/g, "'\\''") + "; exec bash'"
+        : found + " -e bash -c '" + inner.replace(/'/g, "'\\''") + "; exec bash'";
+      run(cmd).then(ok).catch(() => fail("Could not open terminal"));
+    }
+  });
+}
+function openTerminal() {
+  const inner = "cd \"" + ROOT + "\" && docker compose exec interview-env bash";
+  const manual = "cd " + ROOT + " && docker compose exec interview-env bash";
+  return spawnTerminal(inner, manual);
+}
+
+// Server-owned troubleshooting / manual commands, resolved per-platform so the
+// command shown in the UI is exactly the one /api/run-fix executes. Only ids in
+// this list can ever be run — the client sends an id, never a command string.
+// IMPORTANT: teardown is ShellPort-scoped (compose down -v). No host-wide
+// `docker system prune` — that would destroy unrelated Docker projects and, on a
+// candidate's own machine, damage their computer.
+function buildFixes() {
+  const q = (p) => '"' + p + '"';
+  const R = ROOT;
+  if (IS_WIN) {
+    const cd = "Set-Location " + q(R) + "; ";
+    const trouble = [
+      { id: "t-docker", label: "Docker not running", cause: "cannot connect to the Docker engine", run: true, cmd: "Start-Process 'Docker Desktop'" },
+      { id: "t-node", label: "Node.js not found", cause: "'node' is not recognized", run: false, cmd: "Install the LTS build from https://nodejs.org, then re-run the installer." },
+      { id: "t-restart", label: "Dashboard won't open", cause: "localhost:3000 blank or refused", run: true, cmd: "Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }; Set-Location " + q(R + "\\app") + "; Start-Process node -ArgumentList 'server.js' -WindowStyle Hidden" },
+      { id: "t-port", label: "Port 3000 already in use", cause: "EADDRINUSE :3000", run: true, cmd: "Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }" },
+      { id: "t-ext", label: "IDE won't enter the container", cause: "no Dev Container badge in the editor", run: true, cmd: "code --install-extension ms-vscode-remote.remote-containers" },
+      { id: "t-perm", label: "Permission denied in /workspaces", cause: "cannot write files in the editor", run: true, cmd: cd + "docker compose exec interview-env sudo chown -R vscode:vscode /workspaces" },
+      { id: "t-build", label: "Build hangs or fails on a layer", cause: "stuck pulling or building", run: true, cmd: cd + "docker compose build --no-cache" },
+    ];
+    const manual = [
+      { id: "m-up", label: "Start the environment", cause: "", run: true, cmd: cd + "docker compose up -d --build" },
+      { id: "m-shell", label: "Open a shell in the container", cause: "", run: true, cmd: cd + "docker compose exec interview-env bash" },
+      { id: "m-editor", label: "Or open it in your editor", cause: "then: Reopen in Container", run: true, cmd: "code " + q(R) },
+      { id: "m-down", label: "Tear everything down", cause: "ShellPort's container and volume only", run: true, cmd: cd + "docker compose down -v --remove-orphans" },
+      { id: "m-remove", label: "Remove ShellPort entirely", cause: "", run: true, cmd: "Remove-Item -Recurse -Force " + q(R) },
+    ];
+    const emergency = { id: "emergency", label: "Force a full rebuild", run: true, cmd: cd + "docker compose down -v --remove-orphans; docker compose up -d --build" };
+    return { trouble, manual, emergency };
+  }
+  // macOS / Linux (bash)
+  const dockerStart = process.platform === "darwin"
+    ? "open -a OrbStack 2>/dev/null || open -a Docker"
+    : "systemctl --user start docker 2>/dev/null || sudo systemctl start docker";
+  const cd = "cd " + q(R) + " && ";
+  const trouble = [
+    { id: "t-docker", label: "Docker not running", cause: "ECONNREFUSED · cannot connect to docker.sock", run: true, cmd: dockerStart },
+    { id: "t-node", label: "Node.js not found", cause: "command not found: node", run: false, cmd: "Install the LTS build from https://nodejs.org, then re-run the installer." },
+    { id: "t-restart", label: "Dashboard won't open", cause: "localhost:3000 blank or refused", run: true, cmd: "pkill -f server.js; lsof -ti:3000 | xargs kill -9 2>/dev/null; cd " + q(R + "/app") + " && node server.js & disown" },
+    { id: "t-port", label: "Port 3000 already in use", cause: "EADDRINUSE :3000", run: true, cmd: "lsof -ti:3000 | xargs kill -9" },
+    { id: "t-ext", label: "IDE won't enter the container", cause: "no Dev Container badge in the editor", run: true, cmd: "code --install-extension ms-vscode-remote.remote-containers" },
+    { id: "t-perm", label: "Permission denied in /workspaces", cause: "cannot write files in the editor", run: true, cmd: cd + "docker compose exec interview-env sudo chown -R vscode:vscode /workspaces" },
+    { id: "t-build", label: "Build hangs or fails on a layer", cause: "stuck pulling or building", run: true, cmd: cd + "docker compose build --no-cache" },
+  ];
+  const manual = [
+    { id: "m-up", label: "Start the environment", cause: "", run: true, cmd: cd + "docker compose up -d --build" },
+    { id: "m-shell", label: "Open a shell in the container", cause: "", run: true, cmd: cd + "docker compose exec interview-env bash" },
+    { id: "m-editor", label: "Or open it in your editor", cause: "then: Reopen in Container", run: true, cmd: "code " + q(R) },
+    { id: "m-down", label: "Tear everything down", cause: "ShellPort's container and volume only", run: true, cmd: cd + "docker compose down -v --remove-orphans" },
+    { id: "m-remove", label: "Remove ShellPort entirely", cause: "", run: true, cmd: "rm -rf " + q(R) },
+  ];
+  const emergency = { id: "emergency", label: "Force a full rebuild", run: true, cmd: cd + "docker compose down -v --remove-orphans && docker compose up -d --build" };
+  return { trouble, manual, emergency };
+}
+const FIXES = buildFixes();
+state.fixes = FIXES;
+function findFix(id) {
+  return FIXES.trouble.concat(FIXES.manual, [FIXES.emergency]).find((f) => f.id === id && f.run);
 }
 
 // Cleanup — container teardown only, safe on any machine.
@@ -1076,10 +1307,22 @@ async function endEvent() {
   broadcast({ type: "status", status: "event_complete" });
 }
 
-// Strips interviewer-only fields that must never reach a candidate's browser.
+// Config keys safe to expose to any client (incl. a candidate on a DO station).
+// Question sources (QUESTIONS_URL/QUESTION_ROW/QUESTION_TAB) and secrets
+// (QUESTION_WEBHOOK, PROJECT_NAME) are withheld so a candidate cannot read the
+// source off the wire and reach questions other than the one assigned to them.
+const WIRE_CONFIG_KEYS = [
+  "ENABLE_TIMER", "TIMEOUT_ACTION", "TIME_LIMIT_MINUTES", "INACTIVITY_TIMEOUT_MINUTES",
+  "ENABLE_TELEMETRY", "MACHINE_LABEL", "ENABLED_EDITORS", "TERMINAL_ACCESS", "QUESTION_DELIVERY",
+];
+function wireConfig(cfg) {
+  const out = {};
+  for (const k of WIRE_CONFIG_KEYS) if (k in (cfg || {})) out[k] = cfg[k];
+  return out;
+}
 function wireState() {
-  const { telemetry, snapshot, ...rest } = state;
-  return rest;
+  const { telemetry, snapshot, config, ...rest } = state;
+  return { ...rest, config: wireConfig(config) };
 }
 
 // HTTP server
@@ -1095,6 +1338,104 @@ const server = http.createServer((req, res) => {
     recordActivity();
     res.writeHead(204);
     res.end();
+    return;
+  }
+  // Appearance preset — GET is open (every view applies it); POST is admin-gated.
+  if (url.pathname === "/api/appearance") {
+    if (req.method === "GET") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(state.appearance));
+      return;
+    }
+    if (req.method === "POST") {
+      if (!requireAuth(req, res)) return;
+      let body = "";
+      req.on("data", (c) => (body += c));
+      req.on("end", () => {
+        try {
+          const incoming = JSON.parse(body);
+          const next = { ...state.appearance };
+          for (const k of Object.keys(APPEARANCE_DEFAULTS)) {
+            if (APPEARANCE_ENUMS[k].includes(incoming[k])) next[k] = incoming[k];
+          }
+          fs.writeFileSync(APPEARANCE_FILE, JSON.stringify(next, null, 2));
+          state.appearance = next;
+          broadcast({ type: "appearance", appearance: next });
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ saved: true, appearance: next }));
+        } catch (err) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+      return;
+    }
+  }
+  // Admin unlock — verifies the OS user password and mints a privileged token.
+  // Managed stations only; candidate BYOD has no admin surface.
+  if (url.pathname === "/api/admin-unlock" && req.method === "POST") {
+    if (!ADMIN_MODE) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Admin features are unavailable on this machine." }));
+      return;
+    }
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      let password = "";
+      try { password = (JSON.parse(body || "{}").password) || ""; } catch (_) {}
+      verifyOsPassword(password).then((ok) => {
+        if (ok) {
+          const token = issueToken();
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: true, token, expiresIn: TOKEN_TTL }));
+        } else {
+          res.writeHead(401, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: false, error: "Incorrect password." }));
+        }
+      });
+    });
+    return;
+  }
+  // Read-only build/reset log. Open: it carries operation lines (no secrets) and
+  // already streams to every client via the WS `log`/`step` messages.
+  if (url.pathname === "/api/build-log" && req.method === "GET") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ entries: buildLog }));
+    return;
+  }
+  // Open the native OS terminal into the container shell. Gated by Terminal access.
+  if (url.pathname === "/api/open-terminal" && req.method === "POST") {
+    if (!state.terminalEnabled) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, reason: "Terminal access is disabled." }));
+      return;
+    }
+    openTerminal().then((r) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(r));
+    });
+    return;
+  }
+  // Run a troubleshooting / manual-fallback command in a native terminal. The
+  // client sends only a known fix id; the command itself is server-defined.
+  if (url.pathname === "/api/run-fix" && req.method === "POST") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      let id = "";
+      try { id = (JSON.parse(body || "{}").id || "").toString(); } catch (_) {}
+      const fix = findFix(id);
+      if (!fix) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, reason: "Unknown command." }));
+        return;
+      }
+      spawnTerminal(fix.cmd, fix.cmd).then((r) => {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(r));
+      });
+    });
     return;
   }
   // Admin challenge — returns a short-lived bearer token for privileged routes.
@@ -1193,27 +1534,50 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ visible: state.questionVisible }));
     return;
   }
+  // Admin-only read-back of the question SOURCE fields. These are withheld from
+  // the wired config (so candidates can't read them), but an authenticated admin
+  // needs the current value to edit the link in Settings.
+  if (url.pathname === "/api/admin/config" && req.method === "GET") {
+    if (!requireAuth(req, res)) return;
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({
+      QUESTIONS_URL: state.config.QUESTIONS_URL || "",
+      QUESTION_ROW: state.config.QUESTION_ROW || "",
+      QUESTION_TAB: state.config.QUESTION_TAB || "",
+    }));
+    return;
+  }
+
   if (url.pathname === "/api/config" && req.method === "POST") {
     if (!requireAuth(req, res)) return;
     let body = "";
     req.on("data", (c) => (body += c));
     req.on("end", () => {
       try {
-        const newConfig = JSON.parse(body);
+        const patch = JSON.parse(body);
+        // Merge into the server's full config so withheld secrets (QUESTIONS_URL,
+        // QUESTION_WEBHOOK, …) survive a save that the client never sees.
+        const merged = { ...state.config, ...patch };
         const escVal = (v) => String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\r/g, "").replace(/\n/g, "\\n");
-        const envLines = Object.entries(newConfig).map(([k, v]) => `${k}="${escVal(v)}"`).join("\n");
+        const envLines = Object.entries(merged).map(([k, v]) => `${k}="${escVal(v)}"`).join("\n");
         fs.writeFileSync(path.join(ROOT, ".env"), envLines);
+        try { fs.chmodSync(path.join(ROOT, ".env"), 0o600); } catch (_) {}
         const oldTimer = state.config.ENABLE_TIMER;
+        const oldSource = `${state.config.QUESTIONS_URL}|${state.config.QUESTION_ROW}|${state.config.QUESTION_TAB}`;
         loadEnv();
+        deriveEditorAccess();
         if (state.config.ENABLE_TIMER === "true" && oldTimer !== "true" && state.status === "ready") startTimer();
         if (state.config.ENABLE_TIMER !== "true" && timerInterval) {
           clearInterval(timerInterval); timerInterval = null; state.timer = null;
           if (workspaceWatch) { clearInterval(workspaceWatch); workspaceWatch = null; }
           broadcast({ type: "timer_stopped" });
         }
-        broadcast({ type: "config", config: state.config });
+        // If the admin changed the question source, reload the assigned question.
+        const newSource = `${state.config.QUESTIONS_URL}|${state.config.QUESTION_ROW}|${state.config.QUESTION_TAB}`;
+        if (newSource !== oldSource && (state.config.QUESTIONS_URL || "").trim()) fetchQuestion();
+        broadcast({ type: "config", config: wireConfig(state.config) });
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ saved: true, config: state.config }));
+        res.end(JSON.stringify({ saved: true, config: wireConfig(state.config) }));
       } catch (err) {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: err.message }));

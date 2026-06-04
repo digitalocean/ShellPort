@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
-# install.sh - ShellPort Installer (macOS / Linux)
-# Same script, two audiences (the shortlinks are go-links pointing here):
+# admin-install.sh - ShellPort Admin Installer (macOS / Linux)
+# For company-owned DO interview stations. Downloads the admin release package,
+# which includes the admin/ overlay; that overlay is what marks the machine as a
+# managed DO station (ADMIN_MODE), enabling Recycle / End Event and the host scrub.
+# Shortlink (go-link points here):
 #   Admin (company machine):   curl -fsSL https://do.co/shellport-admin-mac | bash
-#   Candidate (remote BYOD):   curl -fsSL https://do.co/shellport-macos     | bash
+# Candidates on their own machine should use install.sh (the universal package),
+# which never installs the admin overlay.
 
 set -euo pipefail
 
@@ -14,8 +18,8 @@ warn() { echo "[shellport] WARN: $*" >&2; }
 die()  { echo "[shellport] ERROR: $*" >&2; exit 1; }
 
 echo ""
-echo "  ShellPort"
-echo "  Ephemeral coding interview workstation"
+echo "  ShellPort (Admin)"
+echo "  Managed DO interview station"
 echo ""
 
 # Prerequisites
@@ -34,10 +38,10 @@ else
         | grep '"tag_name"' | head -1 | cut -d'"' -f4)"
     [[ -z "$VERSION" ]] && die "Could not detect latest release."
 fi
-info "Version: ${VERSION}"
+info "Version: ${VERSION} (admin)"
 
-# Download and extract
-TARBALL_URL="https://github.com/${REPO}/releases/download/${VERSION}/shellport-${VERSION}.tar.gz"
+# Download and extract the admin package (includes the admin/ overlay)
+TARBALL_URL="https://github.com/${REPO}/releases/download/${VERSION}/shellport-${VERSION}-admin.tar.gz"
 info "Downloading..."
 mkdir -p "${INSTALL_DIR}"
 curl -fsSL "${TARBALL_URL}" | tar -xz -C "${INSTALL_DIR}"
@@ -60,6 +64,7 @@ fi
     [[ -n "${SHELLPORT_QUESTION_ROW:-}" ]]  && echo "QUESTION_ROW=\"${SHELLPORT_QUESTION_ROW}\""
     [[ -n "${SHELLPORT_QUESTION_TAB:-}" ]]  && echo "QUESTION_TAB=\"${SHELLPORT_QUESTION_TAB}\""
     [[ -n "${SHELLPORT_PROJECT:-}" ]]       && echo "PROJECT_NAME=\"${SHELLPORT_PROJECT}\""
+    [[ -n "${SHELLPORT_LABEL:-}" ]]         && echo "MACHINE_LABEL=\"${SHELLPORT_LABEL}\""
 } >> "${ENV_FILE}"
 
 chmod 600 "${ENV_FILE}"
@@ -89,6 +94,6 @@ fi
 echo ""
 info "ShellPort is running at http://localhost:3000"
 echo ""
-info "When finished, click 'End Interview' in the browser,"
-info "or run: ${INSTALL_DIR}/done.sh"
+info "This is a managed station: Recycle and End Event are available"
+info "in the dashboard after unlocking with the machine's OS-user password."
 echo ""

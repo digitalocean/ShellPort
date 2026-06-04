@@ -36,7 +36,7 @@ for app in "/Applications/Visual Studio Code.app" "/Applications/Cursor.app" "/A
     fi
 done
 if [[ "$IDE_FOUND" == "false" ]]; then
-    warn "No IDE found. The Browser button (code-server) will still work."
+    warn "No IDE found. The vscode.dev / github.dev web editors will still work."
 fi
 
 # Step 3: Install server dependencies
@@ -67,9 +67,7 @@ fi
     [[ -n "${SHELLPORT_WEBHOOK:-}" ]]       && echo "QUESTION_WEBHOOK=\"${SHELLPORT_WEBHOOK}\""
     [[ -n "${SHELLPORT_QUESTIONS:-}" ]]     && echo "QUESTIONS_URL=\"${SHELLPORT_QUESTIONS}\""
     [[ -n "${SHELLPORT_QUESTION_ROW:-}" ]]  && echo "QUESTION_ROW=\"${SHELLPORT_QUESTION_ROW}\""
-    [[ -n "${SHELLPORT_DO_TOKEN:-}" ]]      && echo "DO_TOKEN=\"${SHELLPORT_DO_TOKEN}\""
-    [[ -n "${SHELLPORT_SPACES_BUCKET:-}" ]] && echo "SPACES_BUCKET=\"${SHELLPORT_SPACES_BUCKET}\""
-    [[ -n "${SHELLPORT_SPACES_REGION:-}" ]] && echo "SPACES_REGION=\"${SHELLPORT_SPACES_REGION}\""
+    [[ -n "${SHELLPORT_QUESTION_TAB:-}" ]]  && echo "QUESTION_TAB=\"${SHELLPORT_QUESTION_TAB}\""
     [[ -n "${SHELLPORT_PROJECT:-}" ]]       && echo "PROJECT_NAME=\"${SHELLPORT_PROJECT}\""
     true
 } >> "${ENV_FILE}"

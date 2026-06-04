@@ -22,8 +22,12 @@ jobs:
 
           mkdir -p /tmp/universal /tmp/admin
 
-          rsync -a --exclude='.git' --exclude='.github' --exclude='.env' --exclude='admin' . /tmp/universal/
-          rsync -a --exclude='.git' --exclude='.github' --exclude='.env' . /tmp/admin/
+          # Dev-only helpers (local-test/-stop) are excluded from shipped packages.
+          DEV_EXCLUDES=(--exclude='.git' --exclude='.github' --exclude='.env' \
+                        --exclude='local-test.sh' --exclude='local-test.ps1' --exclude='local-stop.sh')
+
+          rsync -a "${DEV_EXCLUDES[@]}" --exclude='admin' . /tmp/universal/
+          rsync -a "${DEV_EXCLUDES[@]}" . /tmp/admin/
 
           cd /tmp/universal
           tar -czf "${GITHUB_WORKSPACE}/shellport-${VERSION}.tar.gz" .
@@ -34,7 +38,7 @@ jobs:
           zip -r "${GITHUB_WORKSPACE}/shellport-${VERSION}-admin.zip" .
 
           cd "${GITHUB_WORKSPACE}"
-          ls -la shellport-*.tar.gz shellport-*.zip install.sh Install.ps1
+          ls -la shellport-*.tar.gz shellport-*.zip install.sh Install.ps1 admin-install.sh admin-install.ps1
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -45,3 +49,5 @@ jobs:
             shellport-*.zip
             install.sh
             Install.ps1
+            admin-install.sh
+            admin-install.ps1

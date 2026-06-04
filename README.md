@@ -1,131 +1,156 @@
 # ShellPort
 
-Ephemeral coding interview workstation.
+Ephemeral coding interview workstation. One command to install, a local browser dashboard to run it, one click to remove.
 
-## Quick Start
+---
+
+## Install
+
+Two entry points, same installer — admins set up company-owned machines, candidates set up their own.
+
+**Admin (company-owned machine):**
 
 ```bash
-curl -fsSL https://do.co/shellport-setup-macos | bash
+# macOS / Linux
+curl -fsSL https://do.co/shellport-admin-mac | bash
 ```
-
-Windows:
 
 ```powershell
-irm https://do.co/shellport-setup-win | iex
+# Windows (PowerShell)
+irm https://do.co/shellport-admin-win | iex
 ```
 
-Requires Docker (running) and Node.js.
-
-## What It Does
-
-ShellPort installs a containerized coding environment, opens a dashboard at `localhost:3000`, and tears everything down when the interview ends. Nothing is left on the machine.
-
-The dashboard shows setup progress, displays the interview question (if configured), and presents IDE launch buttons when the environment is ready. Cleanup shows each step and verifies zero residue.
-
-## Container
-
-All tools are pre-installed and current:
-
-- **Languages:** Go, Python, Java 21, Node.js LTS, C/C++, TypeScript
-- **AI:** GitHub Copilot, Copilot Chat, Claude Code
-- **CLI:** Git, GitHub CLI, doctl, Homebrew, jq, yq, s3cmd, neovim
-
-Passwordless sudo. Work is saved in `/workspaces`. Everything outside is destroyed on cleanup.
-
-## Configuration
-
-Non-secret defaults ship in `.env.defaults`. Secrets are passed as environment variables at install time:
+**Candidate (own machine):**
 
 ```bash
-SHELLPORT_WEBHOOK="https://hooks.slack.com/..." \
-SHELLPORT_QUESTIONS="https://docs.google.com/spreadsheets/d/.../edit" \
-curl -fsSL https://do.co/shellport-setup-macos | bash
+# macOS / Linux
+curl -fsSL https://do.co/shellport-macos | bash
 ```
 
-| Variable | Purpose |
-|---|---|
-| `SHELLPORT_WEBHOOK` | Slack notification when question is assigned (includes machine serial) |
-| `SHELLPORT_QUESTIONS` | Google Sheet URL (col A = title, col B = Google Doc ID) |
-| `SHELLPORT_QUESTION_ROW` | Pre-assign a specific row. Omit for random. |
-| `SHELLPORT_DO_TOKEN` | DigitalOcean API token (archive feature) |
-| `SHELLPORT_SPACES_BUCKET` | Spaces bucket (archive feature) |
-| `SHELLPORT_PROJECT` | Project name prefix |
+```powershell
+# Windows (PowerShell)
+irm https://do.co/shellport-windows | iex
+```
 
-Non-secret `.env.defaults`:
+Prerequisites: Docker (running) and Node.js. Your browser opens to `http://localhost:3000` — everything runs locally, no cloud. The dashboard shows build progress, then "Start in" buttons for each detected editor (VS Code, Cursor, Windsurf, VSCodium…), the web editors **vscode.dev** and **github.dev**, and the container terminal.
 
-| Variable | Default | Options |
-|---|---|---|
-| `ENABLE_TIMER` | `false` | Live countdown. On expiry: NOTIFY, LOCK, or WIPE. |
-| `ENABLE_TELEMETRY` | `false` | Export shell history, AI usage, Git activity. |
-| `ENABLE_ARCHIVE` | `false` | Zip `/workspaces` to Spaces before cleanup. |
+---
 
-## Interview Questions
+## The Container
 
-Three options:
+The IDE opens inside an isolated container with the latest Go, Python, Java, Node.js, C/C++, TypeScript, GitHub Copilot, Claude Code, GitHub CLI, doctl, Homebrew, neovim, jq, and yq. All candidate work must be saved in `/workspaces`.
 
-**Option 1: Google Sheet + Google Docs (random)**
+---
 
-Create a Google Sheet (row 1 = header, col A = title, col B = Doc ID). Create a Google Doc per question with full formatting. Share both as "Anyone with the link can view." Set `SHELLPORT_QUESTIONS` to the sheet URL. The server picks a random row, fetches the Doc as HTML, and renders it inside the dashboard.
+## Cleanup
 
-**Option 2: Google Sheet + Google Docs (pre-assigned)**
+Click "End Interview" in the dashboard, or run the script directly:
 
-Same setup as Option 1. Set `SHELLPORT_QUESTION_ROW=3` to always load row 3. The admin knows the question ahead of time.
+- **macOS / Linux:** `~/shellport/done.sh`
+- **Windows:** `~\shellport\Done.ps1`
 
-**Option 3: Manual**
+This stops the server, kills IDE processes, tears down ShellPort's own container and volume, and deletes the project directory. It is scoped to ShellPort — never a host-wide Docker prune, and it leaves browsers and credentials untouched.
 
-Don't set `SHELLPORT_QUESTIONS`. The question section is hidden from the dashboard entirely. Provide the question via email, placed on the computer, or verbally before the interview. The candidate uses the dashboard only for environment setup and IDE launch.
+### Recycle vs. End Event (operator)
 
-## Admin Mode
+Two operator actions, both gated behind OS-level admin auth (macOS/Linux `sudo`/`pkexec`, Windows UAC) so a candidate session can't reach them:
 
-Present when the `admin/` directory exists. Adds to the dashboard:
+- **Recycle** (DO station): scrub the host and load a fresh question for the next candidate without rebuilding the machine.
+- **End Event**: tear down the workstation — power off a DO station, or return the uninstall command on a BYOD machine.
 
-- Feature toggles (timer, telemetry, archive)
-- Timer configuration (action, limit, idle threshold)
-- Question controls (reroll, hide/show)
-- Question assignment display
-- Telemetry stats after cleanup
+ShellPort detects its machine type. On a candidate's own (BYOD) machine it only ever removes its own footprint — never the aggressive host scrub reserved for dedicated DO stations.
 
-**Reset for Next Candidate** runs a 7-phase host teardown directly from the dashboard:
-
-1. Kill IDEs
-2. Docker wipe
-3. Credential scrub (gh, doctl, SSH, Git, Claude, Copilot)
-4. Keychain purge (18 entries)
-5. Browser + IDE data wipe (Chrome, Safari, Firefox, Edge, Brave, Arc)
-6. Shell history, trash, session state
-7. Verify zero residue
-
-Container rebuilds automatically. Dashboard returns to ready.
+---
 
 ## Security
 
-Four isolation layers in `devcontainer.json`: IDE credential blocking, terminal token clearing, remote environment variable nullification, named volume (no host mounts). Pre-install snapshot with post-cleanup verification. `.env` is `chmod 600` and gitignored.
+Credential isolation is enforced via `devcontainer.json`: IDE settings block GitHub token injection, Git credential forwarding, SSH agent forwarding, and port forwarding; every spawned shell force-clears host tokens; the remote environment nullifies host variables and suppresses history. The container mounts only a named Docker volume — no host filesystem, Docker socket, or SSH agent socket is exposed.
+
+Interviewer surfaces — Settings, telemetry, Recycle, End Event — are gated behind an admin unlock (the machine's OS-user password; no separate admin password) and never appear on a BYOD machine. Before each interview ShellPort confirms the host is clean and holds setup until any residue is cleared.
+
+---
+
+## Optional Features
+
+Off by default. Enable via `.env` or a config URL.
+
+| Feature | .env variable | What it does |
+|---|---|---|
+| Timer | `ENABLE_TIMER=true` | Live active/idle countdown. On expiry: NOTIFY, LOCK, or WIPE. Idle defined by `INACTIVITY_TIMEOUT_MINUTES`. |
+| Telemetry | `ENABLE_TELEMETRY=true` | Exports shell history, AI usage, and Git activity on cleanup. |
+| Questions | `QUESTIONS_URL=…` | Loads the assigned question during setup. Source is a **Google Sheet** of `[title, docId]` rows (`QUESTION_ROW` pins the row) or a **Google Doc with one question per tab** (`QUESTION_TAB`, or paste the link with the tab selected). `QUESTION_WEBHOOK` posts the chosen question. The source is never sent to the candidate view — only the rendered question. |
+| Question delivery | `QUESTION_DELIVERY=auto` | `auto` renders inline, falls back to PDF; `inline`; `pdf`; `none`. |
+| Editors | `ENABLED_EDITORS=…` | Comma-separated allow-list of local editors (e.g. `VS Code,Cursor`). Empty offers every detected editor. |
+| Terminal | `TERMINAL_ACCESS=false` | Hides the "Start in terminal" button. Default `true`. |
+
+These settings, plus appearance (theme/accent/font), are also editable live in the dashboard under Admin → Settings.
+
+---
+
+## Repository Layout
+
+```
+.
+├── app/
+│   ├── server.js            # Local orchestration server
+│   ├── index.html           # Dashboard frontend
+│   └── package.json         # Server dependencies (ws only)
+├── .devcontainer/
+│   ├── devcontainer.json    # Container definition, tools, isolation
+│   └── Dockerfile           # System packages (always latest)
+├── docker-compose.yml
+├── install.sh / Install.ps1               # Candidate / universal installers
+├── admin-install.sh / admin-install.ps1   # Managed DO station installers
+├── done.sh / Done.ps1                     # Cleanup
+├── .env.defaults            # Baked defaults copied into .env at install
+├── .env.example             # Documented reference for all options
+├── .github/workflows/release.yml
+├── admin/                   # Optional MDM overlay (host sanitization)
+│   ├── macos/reset.sh
+│   └── windows/Reset.ps1
+└── README.md
+```
+
+---
+
+## Third-Party Environments
+
+`devcontainer.json` works natively with GitHub Codespaces, DevPod, Coder, Daytona, and Gitpod — open the repo in any of them; no ShellPort install or cleanup scripts needed.
+
+---
+
+## Admin Overlay (IT/MDM)
+
+For company-owned machines cycled between candidates. The `admin/` overlay adds host-level sanitization (browser/keychain/IDE wipe, history clear, post-wipe verification, container rebuild) and marks the machine as a managed DO station. It ships only in the admin release package.
+
+```bash
+sudo ./admin/macos/reset.sh                  # local, from inside the repo
+sudo ./admin/macos/reset.sh /path/shellport  # explicit path
+# MDM push (Jamf/Intune) auto-discovers ~/shellport
+```
+
+---
 
 ## Releases
+
+Push a tag; GitHub Actions builds the packages.
 
 ```bash
 git tag -a v1.0.0 -m "Release" && git push origin v1.0.0
 ```
 
-| Asset | Audience |
-|---|---|
-| `shellport-v1.0.0.tar.gz` | Everyone (macOS/Linux) |
-| `shellport-v1.0.0.zip` | Everyone (Windows) |
-| `shellport-v1.0.0-admin.tar.gz` | IT (includes admin/) |
+| Package | Audience | Contains |
+|---|---|---|
+| `shellport-VERSION.tar.gz` / `.zip` | Everyone | Container + app + install + cleanup |
+| `shellport-VERSION-admin.tar.gz` / `.zip` | IT only | Above + `admin/` overlay |
+| `install.sh` / `Install.ps1` | Standalone | Candidate entry points |
+| `admin-install.sh` / `admin-install.ps1` | Standalone | Managed DO station entry points |
 
-## Files
-
-```
-app/server.js              Dashboard server
-app/index.html             Dashboard UI
-.devcontainer/             Container definition
-.env.defaults              Non-secret config (committed)
-install.sh / Install.ps1   One-command installers
-done.sh / Done.ps1         Cleanup + self-destruct
-admin/                     IT reset scripts (Jamf/Intune)
-```
+---
 
 ## Manual Fallback
+
+If the dashboard fails:
 
 ```bash
 cd ~/shellport
@@ -133,9 +158,17 @@ docker compose up -d --build
 docker compose exec interview-env bash
 ```
 
-Cleanup:
+Clean up manually:
 
 ```bash
 docker compose down -v --remove-orphans
 rm -rf ~/shellport
 ```
+
+`docker compose down -v` removes only ShellPort's own container and volume.
+
+---
+
+## Maintainer
+
+DigitalOcean IT — it@digitalocean.com
