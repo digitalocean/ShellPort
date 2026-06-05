@@ -160,10 +160,11 @@ function questionBody(){
   return h;
 }
 function editorActions(){
+  const c=S.config||{};
   let h='';
   (S.enabledEditors||[]).forEach(n=>{h+='<button class="alink" data-ide="'+esc(n)+'">Start in '+esc(n)+' →</button>'});
-  h+='<button class="alink" data-ide="vscode.dev">Start in vscode.dev →</button>';
-  h+='<button class="alink" data-ide="github.dev">Start in github.dev →</button>';
+  if((c.SHOW_VSCODE_DEV||'true')!=='false') h+='<button class="alink" data-ide="vscode.dev">Start in vscode.dev →</button>';
+  if((c.SHOW_GITHUB_DEV||'true')!=='false') h+='<button class="alink" data-ide="github.dev">Start in github.dev →</button>';
   if(S.terminalEnabled) h+='<button class="alink" data-term="1">Start in terminal →</button>';
   return h;
 }
@@ -251,6 +252,8 @@ function scrSettings(){
   let editors='';
   const editorNames=['VS Code','Cursor','Windsurf'].concat(localNames.filter(n=>!['VS Code','Cursor','Windsurf'].includes(n)));
   editorNames.forEach(n=>{const present=localNames.includes(n);editors+=tg(n,present?'':'not detected on this machine',en.includes(n),'ed:'+n)});
+  editors+=tg('vscode.dev','Web editor — no install needed',(c.SHOW_VSCODE_DEV||'true')!=='false','web:vscode');
+  editors+=tg('github.dev','Web editor on GitHub',(c.SHOW_GITHUB_DEV||'true')!=='false','web:github');
   editors+=tg('Terminal access','Allow open-in-terminal',S.terminalEnabled,'term');
   const timerOn=c.ENABLE_TIMER==='true';
   const expiry=['NOTIFY','LOCK','WIPE'].map(x=>'<span class="'+((c.TIMEOUT_ACTION||'NOTIFY')===x?'on':'')+'" data-exp="'+x+'">'+x.charAt(0)+x.slice(1).toLowerCase()+'</span>').join('');
@@ -527,6 +530,8 @@ async function setAppearance(key,val){
 function currentEnabledEditors(){return [...(S.enabledEditors||[])]}
 async function toggle(key){
   if(key==='term'){await saveConfig({TERMINAL_ACCESS:S.terminalEnabled?'false':'true'});return}
+  if(key==='web:vscode'){await saveConfig({SHOW_VSCODE_DEV:(S.config.SHOW_VSCODE_DEV||'true')!=='false'?'false':'true'});return}
+  if(key==='web:github'){await saveConfig({SHOW_GITHUB_DEV:(S.config.SHOW_GITHUB_DEV||'true')!=='false'?'false':'true'});return}
   if(key==='timer'){await saveConfig({ENABLE_TIMER:(S.config.ENABLE_TIMER==='true')?'false':'true'});return}
   if(key.startsWith('ed:')){
     const name=key.slice(3);

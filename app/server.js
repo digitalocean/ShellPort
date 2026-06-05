@@ -188,6 +188,8 @@ function loadEnv() {
     MACHINE_LABEL: "",
     ENABLED_EDITORS: "",
     TERMINAL_ACCESS: "true",
+    SHOW_VSCODE_DEV: "true",
+    SHOW_GITHUB_DEV: "true",
     QUESTION_DELIVERY: "auto",
   };
   if (fs.existsSync(envPath)) {
@@ -986,12 +988,15 @@ async function launchIDE(ideName) {
       // window; without it a running editor swallows the URI and nothing opens.
       const hexPath = Buffer.from(ROOT).toString("hex");
       const uri = `vscode-remote://dev-container+${hexPath}/workspaces`;
-      const cmd = IS_WIN
-        ? `start "" "${ide.path}" --new-window --folder-uri "${uri}"`
-        : `"${ide.path}" --new-window --folder-uri "${uri}" &`;
-      exec(cmd, (err) => {
-        if (err) broadcast({ type: "log", line: `[launch] ${ideName} failed: ${err.message}` });
-      });
+      const args = ["--new-window", "--folder-uri", uri];
+      // spawn with an argv array (not an exec string) so Node quotes the editor
+      // path correctly — a string command split at the space in "Microsoft VS
+      // Code". On Windows the CLI is a .cmd, which must be run via cmd.exe.
+      const child = IS_WIN
+        ? spawn("cmd.exe", ["/c", ide.path, ...args], { detached: true, stdio: "ignore", windowsHide: true })
+        : spawn(ide.path, args, { detached: true, stdio: "ignore" });
+      child.on("error", (err) => broadcast({ type: "log", line: `[launch] ${ideName} failed: ${err.message}` }));
+      child.unref();
       return { launched: ideName };
     }
 
@@ -1515,7 +1520,8 @@ async function endEvent() {
 // questions other than the one assigned to them.
 const WIRE_CONFIG_KEYS = [
   "ENABLE_TIMER", "TIMEOUT_ACTION", "TIME_LIMIT_MINUTES", "INACTIVITY_TIMEOUT_MINUTES",
-  "ENABLE_TELEMETRY", "MACHINE_LABEL", "ENABLED_EDITORS", "TERMINAL_ACCESS", "QUESTION_DELIVERY",
+  "ENABLE_TELEMETRY", "MACHINE_LABEL", "ENABLED_EDITORS", "TERMINAL_ACCESS",
+  "SHOW_VSCODE_DEV", "SHOW_GITHUB_DEV", "QUESTION_DELIVERY",
 ];
 function wireConfig(cfg) {
   const out = {};
