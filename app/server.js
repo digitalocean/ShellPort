@@ -714,13 +714,21 @@ function authenticateAdmin() {
 // falls back to the native admin prompt (the typed value is ignored there).
 function verifyOsPassword(password) {
   return new Promise((resolve) => {
-    if (!password && process.platform !== "linux") return resolve(false);
+    if (!password && process.platform !== "linux") {
+      console.error("[admin-unlock] No password received from the client.");
+      return resolve(false);
+    }
     const user = os.userInfo().username;
     if (process.platform === "darwin") {
       // Args (not a shell string) so the password is never interpolated/quoted.
       const p = spawn("dscl", [".", "-authonly", user, password]);
-      p.on("close", (code) => resolve(code === 0));
-      p.on("error", () => resolve(false));
+      let derr = "";
+      p.stderr.on("data", (d) => (derr += d));
+      p.on("close", (code) => {
+        if (code !== 0) console.error(`[admin-unlock] dscl -authonly failed for "${user}" (exit ${code})${derr ? ": " + derr.trim() : ""} — the typed value is not this account's local password (e.g. SSO/company password differs from the local one).`);
+        resolve(code === 0);
+      });
+      p.on("error", (e) => { console.error(`[admin-unlock] dscl spawn error: ${e.message}`); resolve(false); });
     } else if (IS_WIN) {
       // Password handed to PowerShell via the environment, never argv or the script body.
       const ps = "Add-Type -AssemblyName System.DirectoryServices.AccountManagement;"
