@@ -267,6 +267,13 @@ function scrSettings(){
     +'<div class="r"><div class="rb" style="width:100%"><span class="hl">Source link</span><div class="sub">Paste the Google Docs or Sheets "Copy link". A doc with one question per tab — keep the tab selected when you copy, or use a sheet that indexes them.</div><input class="tinp" type="url" placeholder="https://docs.google.com/document/d/…" value="'+esc((adminCfg&&adminCfg.QUESTIONS_URL)||'').replace(/"/g,'&quot;')+'" data-src></div></div>'
     +'<div class="r" style="align-items:center"><div class="rb"><span class="hl">Delivery</span><div class="sub">Auto shows it in-dashboard, or the PDF if it won\'t format. None = provided separately (e.g. emailed).</div></div><div class="seg" id="seg-qd">'+delivery+'</div></div>'
     +(S.question?'<div class="r" style="align-items:center"><div class="rb"><span class="hl">'+esc(S.question)+'</span><div class="sub">Visible to candidate: '+(S.questionVisible?'yes':'no')+'</div></div><span class="act" data-go="reroll">Reroll</span><span class="act" data-go="qtoggle" style="margin-left:14px">'+(S.questionVisible?'Hide':'Show')+'</span></div>':'<p class="lede" style="margin-top:0">No question loaded.</p>')
+    +'<div class="lbl" style="margin:24px 0 2px"><span>Candidate &amp; notifications</span></div>'
+    +'<div class="r"><div class="rb" style="width:100%"><span class="hl">Candidate name</span><div class="sub">Included in the Slack notification for this session — set it for each candidate.</div><input class="tinp" type="text" placeholder="Jordan Lee" value="'+esc((adminCfg&&adminCfg.CANDIDATE_NAME)||'').replace(/"/g,'&quot;')+'" data-cfg="CANDIDATE_NAME"></div></div>'
+    +'<div class="r"><div class="rb" style="width:100%"><span class="hl">Slack bot token</span><div class="sub">Slack App token (xoxb-…) with chat:write. Posts to any channel — best across multiple blitzes. Usually pushed by IT; stored only on this machine, never shown to the candidate.</div><input class="tinp" type="password" placeholder="xoxb-…" value="'+esc((adminCfg&&adminCfg.SLACK_BOT_TOKEN)||'').replace(/"/g,'&quot;')+'" data-cfg="SLACK_BOT_TOKEN"></div></div>'
+    +'<div class="r"><div class="rb" style="width:100%"><span class="hl">Slack channel</span><div class="sub">Where to post for this event — channel ID (C0…) or name (#hiring-backend).</div><input class="tinp" type="text" placeholder="#hiring-backend-q3" value="'+esc((adminCfg&&adminCfg.SLACK_CHANNEL)||'').replace(/"/g,'&quot;')+'" data-cfg="SLACK_CHANNEL"></div></div>'
+    +'<div class="r"><div class="rb" style="width:100%"><span class="hl">Incoming webhook (fallback)</span><div class="sub">Optional. Used only when no bot token is set — posts to the single channel baked into the URL.</div><input class="tinp" type="url" placeholder="https://hooks.slack.com/services/…" value="'+esc((adminCfg&&adminCfg.QUESTION_WEBHOOK)||'').replace(/"/g,'&quot;')+'" data-cfg="QUESTION_WEBHOOK"></div></div>'
+    +'<div class="r"><div class="rb" style="width:100%"><span class="hl">Machine label</span><div class="sub">Shown in the dashboard and the notification. Defaults to hostname (serial).</div><input class="tinp" type="text" placeholder="DO-Station-07" value="'+esc((adminCfg&&adminCfg.MACHINE_LABEL)||'').replace(/"/g,'&quot;')+'" data-cfg="MACHINE_LABEL"></div></div>'
+    +'<div class="r"><div class="rb" style="width:100%"><span class="hl">Project</span><div class="sub">Optional tag included in the notification.</div><input class="tinp" type="text" placeholder="Backend hiring — Q3" value="'+esc((adminCfg&&adminCfg.PROJECT_NAME)||'').replace(/"/g,'&quot;')+'" data-cfg="PROJECT_NAME"></div></div>'
     +'<div class="lbl" style="margin:24px 0 2px"><span>Timer</span></div>'
     +tg('Enable timer',(c.TIME_LIMIT_MINUTES||'60')+' minute limit',timerOn,'timer')
     +(timerOn?'<div class="r" style="align-items:center"><div class="rb"><span class="hl">Time limit</span><div class="sub">Minutes of active work before expiry</div></div><input class="ninp" type="number" min="1" max="600" value="'+esc(c.TIME_LIMIT_MINUTES||'60')+'" data-num="TIME_LIMIT_MINUTES"></div>':'')
@@ -427,6 +434,7 @@ function wireBody(){
   b.querySelectorAll('[data-qd]').forEach(el=>el.onclick=()=>saveConfig({QUESTION_DELIVERY:el.dataset.qd}));
   b.querySelectorAll('[data-num]').forEach(el=>el.onchange=()=>{const v=Math.max(parseInt(el.min||'1',10),Math.min(parseInt(el.max||'9999',10),parseInt(el.value||'0',10)||parseInt(el.min||'1',10)));saveConfig({[el.dataset.num]:String(v)})});
   b.querySelectorAll('[data-src]').forEach(el=>el.onchange=()=>saveSource(el.value.trim()));
+  b.querySelectorAll('[data-cfg]').forEach(el=>el.onchange=()=>saveAdminField(el.dataset.cfg,el.value.trim()));
   b.querySelectorAll('[data-run]').forEach(el=>el.onclick=()=>runFix(el.dataset.run,el));
   const unl=$('unl'); if(unl){unl.onclick=unlock; const pw=$('pw'); if(pw)pw.onkeydown=e=>{if(e.key==='Enter')unlock()}}
 }
@@ -542,6 +550,14 @@ async function saveSource(url){
   if(url){S.questionLoading=true;S.question=null;S.questionHtml=null}
   render();
   try{await authedFetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({QUESTIONS_URL:url})})}catch(_){}
+}
+// Admin-only text fields withheld from the wire (webhook, label, project): held
+// in adminCfg, saved through the auth-gated /api/config merge.
+async function saveAdminField(key,val){
+  if(!adminCfg)adminCfg={};
+  if(val===((adminCfg[key])||''))return;
+  adminCfg[key]=val;
+  try{await authedFetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({[key]:val})})}catch(_){}
 }
 async function rerollQuestion(){try{await authedFetch('/api/reroll',{method:'POST'});S.questionLoading=true;S.question=null;S.questionHtml=null;render()}catch(_){}}
 async function toggleQuestionVisibility(){try{await fetch('/api/question-toggle',{method:'POST'})}catch(_){}}

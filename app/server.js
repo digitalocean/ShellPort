@@ -178,10 +178,13 @@ function loadEnv() {
     TIME_LIMIT_MINUTES: "60", INACTIVITY_TIMEOUT_MINUTES: "10",
     ENABLE_TELEMETRY: "false",
     PROJECT_NAME: "",
+    CANDIDATE_NAME: "",
     QUESTIONS_URL: "",
     QUESTION_ROW: "",
     QUESTION_TAB: "",
     QUESTION_WEBHOOK: "",
+    SLACK_BOT_TOKEN: "",
+    SLACK_CHANNEL: "",
     MACHINE_LABEL: "",
     ENABLED_EDITORS: "",
     TERMINAL_ACCESS: "true",
@@ -557,48 +560,82 @@ async function fetchQuestion() {
   }
 }
 
-// Webhook notification — fires every time a question is assigned.
-// `source` is a human-readable locator: a sheet row ("row 4") or a doc tab ("tab t.ab12").
+// Re-send the notification for the question currently assigned. Used when the
+// interviewer fills in the candidate name after the question was already loaded,
+// so the posted record carries who/what/where.
+function notifyAssignment() {
+  if (state.lastAssignment) fireQuestionWebhook(state.lastAssignment.title, state.lastAssignment.source);
+}
+
+// Notify the hiring team that a question was assigned. Captures candidate name,
+// machine, and the question. Prefers a Slack App bot token (chat.postMessage —
+// posts to any channel, the right fit across multiple hiring blitzes); falls back
+// to a single-channel incoming webhook URL. `source` is a human-readable locator
+// (a sheet row "row 4" or a doc tab title).
 async function fireQuestionWebhook(title, source) {
+  state.lastAssignment = { title, source };
+
+  const botToken = (state.config.SLACK_BOT_TOKEN || "").trim();
+  const channel = (state.config.SLACK_CHANNEL || "").trim();
   const webhookUrl = (state.config.QUESTION_WEBHOOK || "").trim();
-  if (!webhookUrl) return;
+  if (!botToken && !webhookUrl) return; // notifications off
 
   const hostname = os.hostname();
   const serial = await getMachineSerial();
   const label = (state.config.MACHINE_LABEL || "").trim() || `${hostname} (${serial})`;
+  const candidate = (state.config.CANDIDATE_NAME || "").trim() || "—";
   const project = (state.config.PROJECT_NAME || "").trim() || "—";
   const mode = (state.config.QUESTION_ROW || state.config.QUESTION_TAB) ? "pre-assigned" : "random";
   const ts = new Date().toLocaleString("en-US", { timeZone: "America/Denver", hour12: true, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
-  const payload = JSON.stringify({
-    text: `ShellPort: ${label} → ${title} (${source}, ${mode})`,
-    blocks: [
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: [
-            `*ShellPort — Question Assigned*`,
-            ``,
-            `*Machine:* ${label}`,
-            `*Serial:* ${serial}`,
-            `*Question:* ${title}`,
-            `*Source:* ${source}  |  *Mode:* ${mode}`,
-            `*Project:* ${project}`,
-            `*Time:* ${ts}`,
-          ].join("\n")
-        }
-      }
-    ]
-  });
+  const text = `ShellPort: ${candidate} → ${title} on ${label}`;
+  const blocks = [{
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: [
+        `*ShellPort — Question Assigned*`,
+        ``,
+        `*Candidate:* ${candidate}`,
+        `*Machine:* ${label}`,
+        `*Serial:* ${serial}`,
+        `*Question:* ${title}`,
+        `*Source:* ${source}  |  *Mode:* ${mode}`,
+        `*Project:* ${project}`,
+        `*Time:* ${ts}`,
+      ].join("\n")
+    }
+  }];
 
-  // POST via Node, not a shell — titles with quotes (e.g. "Conway's Game of Life") stay safe.
+  // Slack App path: bot token posts to any channel. Slack always returns HTTP 200;
+  // success/failure is in the JSON `ok`/`error` field.
+  if (botToken && channel) {
+    const payload = JSON.stringify({ channel, text, blocks });
+    httpRequest("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8", "Authorization": "Bearer " + botToken, "Content-Length": Buffer.byteLength(payload) },
+      body: payload,
+    }).then((res) => {
+      let ok = false, err = "";
+      try { const j = JSON.parse(res.body || "{}"); ok = !!j.ok; err = j.error || ""; } catch (_) {}
+      if (ok) broadcast({ type: "log", line: `[slack] Sent: ${candidate} → ${title}` });
+      else broadcast({ type: "log", line: `[slack] postMessage failed: ${err || ("HTTP " + res.status)}` });
+    }).catch(() => broadcast({ type: "log", line: `[slack] Failed to deliver notification` }));
+    return;
+  }
+  if (botToken && !channel) {
+    broadcast({ type: "log", line: `[slack] Bot token set but no SLACK_CHANNEL — skipping notification` });
+    if (!webhookUrl) return;
+  }
+
+  // Fallback: incoming webhook (single channel baked into the URL).
+  const payload = JSON.stringify({ text, blocks });
   httpRequest(webhookUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
     body: payload,
   }).then((res) => {
-    if (res.status >= 200 && res.status < 300) broadcast({ type: "log", line: `[webhook] Sent: ${label} → ${title}` });
+    if (res.status >= 200 && res.status < 300) broadcast({ type: "log", line: `[webhook] Sent: ${candidate} → ${title}` });
     else broadcast({ type: "log", line: `[webhook] Delivery returned HTTP ${res.status}` });
   }).catch(() => {
     broadcast({ type: "log", line: `[webhook] Failed to deliver notification` });
@@ -1460,9 +1497,10 @@ async function endEvent() {
 }
 
 // Config keys safe to expose to any client (incl. a candidate on a DO station).
-// Question sources (QUESTIONS_URL/QUESTION_ROW/QUESTION_TAB) and secrets
-// (QUESTION_WEBHOOK, PROJECT_NAME) are withheld so a candidate cannot read the
-// source off the wire and reach questions other than the one assigned to them.
+// Question sources (QUESTIONS_URL/QUESTION_ROW/QUESTION_TAB), notification secrets
+// (QUESTION_WEBHOOK, SLACK_BOT_TOKEN, SLACK_CHANNEL), and PII (CANDIDATE_NAME,
+// PROJECT_NAME) are withheld so a candidate cannot read them off the wire or reach
+// questions other than the one assigned to them.
 const WIRE_CONFIG_KEYS = [
   "ENABLE_TIMER", "TIMEOUT_ACTION", "TIME_LIMIT_MINUTES", "INACTIVITY_TIMEOUT_MINUTES",
   "ENABLE_TELEMETRY", "MACHINE_LABEL", "ENABLED_EDITORS", "TERMINAL_ACCESS", "QUESTION_DELIVERY",
@@ -1706,6 +1744,12 @@ const server = http.createServer((req, res) => {
       QUESTIONS_URL: state.config.QUESTIONS_URL || "",
       QUESTION_ROW: state.config.QUESTION_ROW || "",
       QUESTION_TAB: state.config.QUESTION_TAB || "",
+      QUESTION_WEBHOOK: state.config.QUESTION_WEBHOOK || "",
+      SLACK_BOT_TOKEN: state.config.SLACK_BOT_TOKEN || "",
+      SLACK_CHANNEL: state.config.SLACK_CHANNEL || "",
+      CANDIDATE_NAME: state.config.CANDIDATE_NAME || "",
+      MACHINE_LABEL: state.config.MACHINE_LABEL || "",
+      PROJECT_NAME: state.config.PROJECT_NAME || "",
     }));
     return;
   }
@@ -1726,6 +1770,7 @@ const server = http.createServer((req, res) => {
         try { fs.chmodSync(path.join(ROOT, ".env"), 0o600); } catch (_) {}
         const oldTimer = state.config.ENABLE_TIMER;
         const oldSource = `${state.config.QUESTIONS_URL}|${state.config.QUESTION_ROW}|${state.config.QUESTION_TAB}`;
+        const oldCandidate = state.config.CANDIDATE_NAME || "";
         loadEnv();
         deriveEditorAccess();
         if (state.config.ENABLE_TIMER === "true" && oldTimer !== "true" && state.status === "ready") startTimer();
@@ -1736,7 +1781,11 @@ const server = http.createServer((req, res) => {
         }
         // If the admin changed the question source, reload the assigned question.
         const newSource = `${state.config.QUESTIONS_URL}|${state.config.QUESTION_ROW}|${state.config.QUESTION_TAB}`;
-        if (newSource !== oldSource && (state.config.QUESTIONS_URL || "").trim()) fetchQuestion();
+        const sourceChanged = newSource !== oldSource && (state.config.QUESTIONS_URL || "").trim();
+        if (sourceChanged) fetchQuestion();
+        // Candidate name filled in after a question was already assigned: re-post the
+        // notification so it carries the candidate (the source reload already notifies).
+        else if ((state.config.CANDIDATE_NAME || "") !== oldCandidate && state.lastAssignment) notifyAssignment();
         broadcast({ type: "config", config: wireConfig(state.config) });
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ saved: true, config: wireConfig(state.config) }));
