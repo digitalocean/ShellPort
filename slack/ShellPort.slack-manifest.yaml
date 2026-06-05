@@ -1,0 +1,21 @@
+# ShellPort — Slack App manifest
+# Create at https://api.slack.com/apps → "Create New App" → "From a manifest" → paste this.
+# The app icon is NOT part of the manifest: upload ShellPort-icon.png under
+# Basic Information → Display Information → App icon after creating the app.
+display_information:
+  name: ShellPort
+  description: Posts which interview question each candidate was assigned, and on which station.
+  background_color: "#001413"
+features:
+  bot_user:
+    display_name: ShellPort
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      - chat:write          # post messages to channels the bot is a member of
+      - chat:write.public   # post to any public channel without inviting first
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

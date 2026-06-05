@@ -4,6 +4,7 @@
 .session_snapshot.json
 .last_station_reset
 .current_question
+.appearance.json
 question.pdf
 .server_pid
 .cache

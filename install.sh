@@ -7,7 +7,35 @@
 set -euo pipefail
 
 REPO="digitalocean/shellport"
+SELF_URL="https://do.co/shellport-macos"   # canonical source of this installer
 INSTALL_DIR="${HOME}/shellport"
+
+# ── MDM/root re-exec (macOS) ──────────────────────────────────────────────────
+# An MDM (or a `sudo`-run install) executes as root, but ShellPort is per-user:
+# it installs to ~/shellport, uses the logged-in user's Docker, and opens their
+# browser. When we're root on macOS with a desktop user present, re-run AS that
+# user in their GUI (Aqua) session so HOME, PATH, Docker and the browser resolve
+# correctly — so the same one-liner works interactively and via MDM. (Linux and
+# normal interactive runs skip this block.)
+if [ "$(uname)" = "Darwin" ] && [ "$(id -u)" -eq 0 ]; then
+  consoleUser="$(/usr/bin/stat -f%Su /dev/console 2>/dev/null || true)"
+  case "${consoleUser:-}" in
+    ""|root|loginwindow|_mbsetupuser)
+      echo "[shellport] No desktop user is logged in — will run at the next user login."
+      exit 0 ;;
+  esac
+  consoleUID="$(/usr/bin/id -u "$consoleUser")"
+  prelude=""
+  for v in SHELLPORT_WEBHOOK SHELLPORT_SLACK_TOKEN SHELLPORT_SLACK_CHANNEL \
+           SHELLPORT_QUESTIONS SHELLPORT_QUESTION_ROW SHELLPORT_QUESTION_TAB \
+           SHELLPORT_PROJECT SHELLPORT_LABEL INTERVIEW_VERSION; do
+    eval "val=\${$v:-}"
+    [ -n "${val}" ] && prelude+="export ${v}=$(printf %q "${val}"); "
+  done
+  echo "[shellport] Running as ${consoleUser}…"
+  exec launchctl asuser "${consoleUID}" sudo -u "${consoleUser}" /bin/bash -lc \
+    "${prelude}curl -fsSL ${SELF_URL} | /bin/bash"
+fi
 
 info() { echo "[shellport] $*"; }
 warn() { echo "[shellport] WARN: $*" >&2; }
@@ -56,6 +84,8 @@ fi
 # Append secrets from SHELLPORT_ environment variables (never in the release)
 {
     [[ -n "${SHELLPORT_WEBHOOK:-}" ]]       && echo "QUESTION_WEBHOOK=\"${SHELLPORT_WEBHOOK}\""
+    [[ -n "${SHELLPORT_SLACK_TOKEN:-}" ]]   && echo "SLACK_BOT_TOKEN=\"${SHELLPORT_SLACK_TOKEN}\""
+    [[ -n "${SHELLPORT_SLACK_CHANNEL:-}" ]] && echo "SLACK_CHANNEL=\"${SHELLPORT_SLACK_CHANNEL}\""
     [[ -n "${SHELLPORT_QUESTIONS:-}" ]]     && echo "QUESTIONS_URL=\"${SHELLPORT_QUESTIONS}\""
     [[ -n "${SHELLPORT_QUESTION_ROW:-}" ]]  && echo "QUESTION_ROW=\"${SHELLPORT_QUESTION_ROW}\""
     [[ -n "${SHELLPORT_QUESTION_TAB:-}" ]]  && echo "QUESTION_TAB=\"${SHELLPORT_QUESTION_TAB}\""

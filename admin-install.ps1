@@ -11,7 +11,48 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $Repo = "digitalocean/shellport"
+$SelfUrl = "https://do.co/shellport-admin-win"   # canonical source of this installer
 $InstallDir = Join-Path $env:USERPROFILE "shellport"
+
+# ── MDM/SYSTEM re-exec (Windows) ──────────────────────────────────────────────
+# Intune runs scripts as SYSTEM, but ShellPort is per-user: it installs to the
+# user's profile, talks to their Docker, and opens their browser. When we're
+# SYSTEM with a user logged in, re-launch this installer in that user's session
+# via a one-shot scheduled task (forwarding any SHELLPORT_* config) so the same
+# one-liner works interactively and via Intune.
+# Tip: setting the Intune script to "Run using the logged-on credentials = Yes"
+# (or a Win32 app with Install behavior = User) skips this block entirely.
+if ([Security.Principal.WindowsIdentity]::GetCurrent().IsSystem) {
+    $loggedIn = (Get-CimInstance Win32_ComputerSystem).UserName   # DOMAIN\user, or empty
+    if (-not $loggedIn) {
+        Write-Host "[shellport] No interactive user is logged in — will run at the next user login."
+        exit 0
+    }
+    $vars = "SHELLPORT_WEBHOOK","SHELLPORT_SLACK_TOKEN","SHELLPORT_SLACK_CHANNEL",
+            "SHELLPORT_QUESTIONS","SHELLPORT_QUESTION_ROW","SHELLPORT_QUESTION_TAB",
+            "SHELLPORT_PROJECT","SHELLPORT_LABEL","INTERVIEW_VERSION"
+    $prelude = ""
+    foreach ($v in $vars) {
+        $val = [Environment]::GetEnvironmentVariable($v)
+        if ($val) { $prelude += "`$env:$v='" + ($val -replace "'","''") + "'; " }
+    }
+    $inner   = "$prelude irm $SelfUrl | iex"
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($inner))
+    $action  = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand $encoded"
+    $principal = New-ScheduledTaskPrincipal -UserId $loggedIn -LogonType Interactive -RunLevel Limited
+    $settings  = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+    Register-ScheduledTask -TaskName "ShellPortInstall" -Action $action -Principal $principal -Settings $settings -Force | Out-Null
+    Start-ScheduledTask -TaskName "ShellPortInstall"
+    Write-Host "[shellport] Launched in $loggedIn's session via scheduled task."
+    # Wait until the task has started and finished, then remove its definition.
+    for ($i = 0; $i -lt 90; $i++) {
+        Start-Sleep -Seconds 2
+        $state = (Get-ScheduledTask -TaskName "ShellPortInstall" -ErrorAction SilentlyContinue).State
+        if ($i -gt 1 -and $state -ne "Running") { break }
+    }
+    Unregister-ScheduledTask -TaskName "ShellPortInstall" -Confirm:$false -ErrorAction SilentlyContinue
+    exit 0
+}
 
 function Write-Info  { param([string]$Msg) Write-Host "[shellport] $Msg" }
 function Write-Warn  { param([string]$Msg) Write-Warning "[shellport] WARN: $Msg" }
@@ -67,6 +108,8 @@ if (Test-Path $defaultsFile) {
 
 $secrets = @()
 if ($env:SHELLPORT_WEBHOOK)       { $secrets += "QUESTION_WEBHOOK=`"$env:SHELLPORT_WEBHOOK`"" }
+if ($env:SHELLPORT_SLACK_TOKEN)   { $secrets += "SLACK_BOT_TOKEN=`"$env:SHELLPORT_SLACK_TOKEN`"" }
+if ($env:SHELLPORT_SLACK_CHANNEL) { $secrets += "SLACK_CHANNEL=`"$env:SHELLPORT_SLACK_CHANNEL`"" }
 if ($env:SHELLPORT_QUESTIONS)     { $secrets += "QUESTIONS_URL=`"$env:SHELLPORT_QUESTIONS`"" }
 if ($env:SHELLPORT_QUESTION_ROW)  { $secrets += "QUESTION_ROW=`"$env:SHELLPORT_QUESTION_ROW`"" }
 if ($env:SHELLPORT_QUESTION_TAB)  { $secrets += "QUESTION_TAB=`"$env:SHELLPORT_QUESTION_TAB`"" }

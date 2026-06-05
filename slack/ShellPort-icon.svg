@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#012A27"/>
+      <stop offset="1" stop-color="#001413"/>
+    </linearGradient>
+  </defs>
+  <!-- Full-bleed rounded square so it looks right whether or not Slack masks it -->
+  <rect width="512" height="512" rx="104" fill="url(#bg)"/>
+  <!-- ShellPort mark: [ > ] — the in-app bracket+chevron, scaled up and centered -->
+  <g transform="translate(74,100) scale(13)" fill="none" stroke="#4FA3E8"
+     stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 4H3.5v16H6"/>
+    <path d="M22 4h2.5v16H22"/>
+    <path d="M11 8l4 4-4 4"/>
+  </g>
+</svg>

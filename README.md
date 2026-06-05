@@ -34,6 +34,15 @@ irm https://do.co/shellport-windows | iex
 
 Prerequisites: Docker (running) and Node.js. Your browser opens to `http://localhost:3000` — everything runs locally, no cloud. The dashboard shows build progress, then "Start in" buttons for each detected editor (VS Code, Cursor, Windsurf, VSCodium…), the web editors **vscode.dev** and **github.dev**, and the container terminal.
 
+### Deploy via MDM (Jamf / Intune)
+
+The **same one-liner** is the MDM payload — no wrapper needed. ShellPort is per-user (it installs to `~/shellport`, uses the logged-in user's Docker, and opens their browser), and the installer detects when an MDM runs it as **root** (Jamf) or **SYSTEM** (Intune) and automatically re-runs in the logged-in user's session, forwarding any `SHELLPORT_*` config.
+
+- **Jamf (macOS):** paste `curl -fsSL https://do.co/shellport-admin-mac | bash` into a script and run it from a policy. Use a **login** or **Self Service** trigger so a user is present; if none is, the run exits cleanly so the next login retries. Set per-event config (questions, Slack token/channel, label) as policy parameters exported as `SHELLPORT_*`, or bake them into the release.
+- **Intune (Windows):** deploy `irm https://do.co/shellport-admin-win | iex` as a platform script. Either set **"Run this script using the logged-on credentials = Yes"** (cleanest — runs as the user directly), or leave it as SYSTEM and the installer re-launches into the user's session via a one-shot scheduled task.
+
+Prerequisites still apply per user: Docker (set to start at login) and Node.js must be installed for the logged-in user, or the installer stops with a clear message.
+
 ---
 
 ## The Container
@@ -80,8 +89,9 @@ Off by default. Enable via `.env` or a config URL.
 |---|---|---|
 | Timer | `ENABLE_TIMER=true` | Live active/idle countdown. On expiry: NOTIFY, LOCK, or WIPE. Idle defined by `INACTIVITY_TIMEOUT_MINUTES`. |
 | Telemetry | `ENABLE_TELEMETRY=true` | Exports shell history, AI usage, and Git activity on cleanup. |
-| Questions | `QUESTIONS_URL=…` | Loads the assigned question during setup. Source is a **Google Sheet** of `[title, docId]` rows (`QUESTION_ROW` pins the row) or a **Google Doc with one question per tab** — all tabs are detected automatically and one is assigned at random (set `QUESTION_TAB=t.<id>` to pin a specific tab). `QUESTION_WEBHOOK` posts the chosen question. The source is never sent to the candidate view — only the rendered question. |
+| Questions | `QUESTIONS_URL=…` | Loads the assigned question during setup. Source is a **Google Sheet** of `[title, docId]` rows (`QUESTION_ROW` pins the row) or a **Google Doc with one question per tab** — all tabs are detected automatically and one is assigned at random (set `QUESTION_TAB=t.<id>` to pin a specific tab). The source is never sent to the candidate view — only the rendered question. |
 | Question delivery | `QUESTION_DELIVERY=auto` | `auto` renders inline, falls back to PDF; `inline`; `pdf`; `none`. |
+| Notifications | `SLACK_BOT_TOKEN=…` | Posts who/what/where to Slack when a question is assigned — **candidate name**, machine label, and the question. Preferred: a **Slack App** bot token (`xoxb-…`, scope `chat:write`) plus `SLACK_CHANNEL` — one token works across every blitz, just change the channel per event. Falls back to a single-channel incoming `QUESTION_WEBHOOK` if no token is set. Candidate name is set per-session in the dashboard. |
 | Editors | `ENABLED_EDITORS=…` | Comma-separated allow-list of local editors (e.g. `VS Code,Cursor`). Empty offers every detected editor. |
 | Terminal | `TERMINAL_ACCESS=false` | Hides the "Start in terminal" button. Default `true`. |
 

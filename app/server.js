@@ -906,7 +906,11 @@ async function setup() {
     setTarget(15, "setup");
 
     addStep("build", "Building container", "running");
-    await run(`"${devcontainerCmd}" up --workspace-folder "${ROOT}" --remove-existing-container`, {
+    // Windows runs via `powershell -Command`, where a quoted executable path is a
+    // string expression, not an invocation — it needs the call operator (&) or it
+    // fails with "Unexpected token 'up'". bash invokes a quoted path directly.
+    const invoke = IS_WIN ? "& " : "";
+    await run(`${invoke}"${devcontainerCmd}" up --workspace-folder "${ROOT}" --remove-existing-container`, {
       stream: true, trackBuild: true, baseProgress: 15, weight: 60
     });
     addStep("build", "Container ready", "done");
