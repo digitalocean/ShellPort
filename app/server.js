@@ -1,6 +1,7 @@
 const http = require("http");
 const https = require("https");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { exec, spawn } = require("child_process");
 const crypto = require("crypto");
@@ -359,21 +360,57 @@ function cleanDocHtml(htmlRaw) {
     .trim();
 }
 
-// Render a single Google Doc (optionally one tab) as the assigned question:
-// export a PDF copy for the in-page reader, and clean HTML for the inline view.
-async function renderDocQuestion(docId, tab) {
-  const tabParam = tab ? `&tab=${encodeURIComponent(tab)}` : "";
-  addStep("question", "Loading formatted question", "running");
+// List a Google Doc's tabs (id + title) by scraping the public /preview page —
+// the export endpoints don't reveal tab IDs and we have no API credentials. The
+// first tab exports as "t.0"; the rest carry their own t.<id>. Returns [] for a
+// non-tabbed doc, or if the page can't be read, so callers fall back gracefully.
+async function listDocTabs(docId) {
+  try {
+    const resp = await httpRequest(`https://docs.google.com/document/d/${docId}/preview`);
+    const html = resp.body || "";
+    if (resp.status >= 400 || !html) return [];
+    const decode = (s) => { try { return JSON.parse('"' + s + '"'); } catch (_) { return s; } };
+    // First tab: title from the "mkch" entry. Subsequent tabs: id + title from
+    // each "ac" entry. Their ids match the export's ?tab= parameter exactly.
+    const first = html.match(/\{"ty":"mkch","d":\[\[1,"((?:[^"\\]|\\.)*)"\]\]\}/);
+    const re = /\{"ty":"ac","d":\["(t\.[a-zA-Z0-9]+)",\[1,"((?:[^"\\]|\\.)*)"\]/g;
+    const acTabs = [];
+    let m;
+    while ((m = re.exec(html))) acTabs.push({ id: m[1], title: decode(m[2]) });
+    if (!acTabs.length && !first) return [];
+    const tabs = [{ id: "t.0", title: first ? decode(first[1]) : "Tab 1" }, ...acTabs];
+    const seen = new Set();
+    return tabs.filter((t) => (seen.has(t.id) ? false : seen.add(t.id)));
+  } catch (_) {
+    return [];
+  }
+}
 
-  // PDF copy for the in-page reader / remote handoff.
+// Export a Google Doc (optionally one tab) to question.pdf for the in-page
+// reader / remote handoff. Cache-busts the URL so a re-rolled question never
+// shows a stale PDF; silent no-op if the export isn't a real PDF.
+async function exportQuestionPdf(docId, tab) {
+  const tabParam = tab ? `&tab=${encodeURIComponent(tab)}` : "";
   try {
     const pdfResp = await httpRequest(`https://docs.google.com/document/d/${docId}/export?format=pdf${tabParam}`, { binary: true });
     if (pdfResp.status < 400 && Buffer.isBuffer(pdfResp.body) && pdfResp.body.length > 1000
         && pdfResp.body.slice(0, 4).toString() === "%PDF") {
       fs.writeFileSync(path.join(ROOT, "question.pdf"), pdfResp.body);
-      state.questionPdf = "/api/question.pdf";
+      state.questionPdf = "/api/question.pdf?v=" + Date.now();
     }
   } catch (_) { state.questionPdf = null; }
+}
+
+// Render a single Google Doc tab as the assigned question: export a PDF copy for
+// the in-page reader, and clean HTML for the inline view. `tabTitle`/`locator`,
+// when the caller has already resolved the tab, override the title/locator that
+// would otherwise be derived from the exported body (per-tab exports carry no
+// heading, so the tab name is the authoritative title).
+async function renderDocQuestion(docId, tab, tabTitle, locator) {
+  const tabParam = tab ? `&tab=${encodeURIComponent(tab)}` : "";
+  addStep("question", "Loading formatted question", "running");
+
+  await exportQuestionPdf(docId, tab);
 
   const docResp = await httpRequest(`https://docs.google.com/document/d/${docId}/export?format=html${tabParam}`);
   const raw = docResp.body || "";
@@ -381,14 +418,16 @@ async function renderDocQuestion(docId, tab) {
 
   // Title from the doc's Title-styled paragraph (Google exports it as a
   // <p class="...title...">, not an <h1>), then the first heading, then generic.
-  let title = "Interview question";
-  const titleP = raw.match(/<p[^>]*class="[^"]*\btitle\b[^"]*"[^>]*>([\s\S]*?)<\/p>/i);
-  const head = raw.match(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/i);
-  const titleText = (titleP && titleP[1].replace(/<[^>]+>/g, "").trim())
-    || (head && head[1].replace(/<[^>]+>/g, "").trim());
-  if (titleText) title = titleText;
+  let title = tabTitle || "Interview question";
+  if (!tabTitle) {
+    const titleP = raw.match(/<p[^>]*class="[^"]*\btitle\b[^"]*"[^>]*>([\s\S]*?)<\/p>/i);
+    const head = raw.match(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/i);
+    const titleText = (titleP && titleP[1].replace(/<[^>]+>/g, "").trim())
+      || (head && head[1].replace(/<[^>]+>/g, "").trim());
+    if (titleText) title = titleText;
+  }
 
-  const locator = tab ? `tab ${tab}` : "whole doc";
+  locator = locator || (tab ? `tab ${tab}` : "whole doc");
   state.question = title;
   state.questionHtml = body;
   state.questionLoading = false;
@@ -421,10 +460,30 @@ async function fetchQuestion() {
     // tab per station without maintaining a separate index sheet.
     const docsMatch = url.match(/docs\.google\.com\/document\/d\/([a-zA-Z0-9_-]+)/);
     if (docsMatch) {
-      let tab = (state.config.QUESTION_TAB || "").trim();
-      const urlTab = url.match(/[?&]tab=(t\.[a-zA-Z0-9_-]+)/);
-      if (urlTab) tab = urlTab[1];
-      await renderDocQuestion(docsMatch[1], tab);
+      const docId = docsMatch[1];
+      // A pasted doc link always carries the currently-open tab (?tab=t.0), so we
+      // must NOT treat that as a pin — only an explicit QUESTION_TAB pins. With no
+      // pin we detect every tab and randomly assign one (re-rolls on reroll) — the
+      // doc equivalent of random row selection from a sheet.
+      const pinned = (state.config.QUESTION_TAB || "").trim();
+      const tabs = await listDocTabs(docId);
+      let tab = "", tabTitle = null, locator = "whole doc";
+      if (pinned) {
+        tab = pinned;
+        const found = tabs.find((t) => t.id === pinned);
+        tabTitle = found ? found.title : null;
+        locator = found ? `${found.title} (pinned)` : `tab ${pinned} (pinned)`;
+      } else if (tabs.length) {
+        const pick = tabs[Math.floor(Math.random() * tabs.length)];
+        tab = pick.id; tabTitle = pick.title;
+        locator = `${pick.title} (random of ${tabs.length})`;
+        broadcast({ type: "log", line: `[question] Detected ${tabs.length} tab(s); randomly assigned "${pick.title}".` });
+      } else {
+        // Non-tabbed doc (or detection failed): honor an explicit URL tab, else whole doc.
+        const urlTab = url.match(/[?&]tab=(t\.[a-zA-Z0-9_-]+)/);
+        if (urlTab) { tab = urlTab[1]; locator = `tab ${tab}`; }
+      }
+      await renderDocQuestion(docId, tab, tabTitle, locator);
       return;
     }
 
@@ -465,15 +524,7 @@ async function fetchQuestion() {
     if (docId && docId.length > 10 && /^[a-zA-Z0-9_-]+$/.test(docId)) {
       addStep("question", "Loading formatted question", "running");
 
-      // PDF copy for offline view / handoff.
-      try {
-        const pdfResp = await httpRequest(`https://docs.google.com/document/d/${docId}/export?format=pdf`, { binary: true });
-        if (pdfResp.status < 400 && Buffer.isBuffer(pdfResp.body) && pdfResp.body.length > 1000
-            && pdfResp.body.slice(0, 4).toString() === "%PDF") {
-          fs.writeFileSync(path.join(ROOT, "question.pdf"), pdfResp.body);
-          state.questionPdf = "/api/question.pdf";
-        }
-      } catch (_) { state.questionPdf = null; }
+      await exportQuestionPdf(docId);
 
       const docResp = await httpRequest(`https://docs.google.com/document/d/${docId}/export?format=html`);
       const body = cleanDocHtml(docResp.body || "");
@@ -512,7 +563,7 @@ async function fireQuestionWebhook(title, source) {
   const webhookUrl = (state.config.QUESTION_WEBHOOK || "").trim();
   if (!webhookUrl) return;
 
-  const hostname = require("os").hostname();
+  const hostname = os.hostname();
   const serial = await getMachineSerial();
   const label = (state.config.MACHINE_LABEL || "").trim() || `${hostname} (${serial})`;
   const project = (state.config.PROJECT_NAME || "").trim() || "—";
@@ -627,7 +678,7 @@ function authenticateAdmin() {
 function verifyOsPassword(password) {
   return new Promise((resolve) => {
     if (!password && process.platform !== "linux") return resolve(false);
-    const user = require("os").userInfo().username;
+    const user = os.userInfo().username;
     if (process.platform === "darwin") {
       // Args (not a shell string) so the password is never interpolated/quoted.
       const p = spawn("dscl", [".", "-authonly", user, password]);
@@ -654,21 +705,63 @@ function uninstallCommand() {
     : `rm -rf "${ROOT}"`;
 }
 
-// User-session shutdown (DO end-event). Tries the no-prompt path first, then a
-// privileged fallback, and logs why each attempt failed so a silent no-op on
-// macOS (System Events needs Automation permission) is diagnosable.
+// Release installs are extracted from a tarball (no .git); a .git here means a
+// dev/manual checkout. We never delete a working tree.
+function isGitCheckout() {
+  return fs.existsSync(path.join(ROOT, ".git"));
+}
+
+// Remove ShellPort's own install directory — and nothing else. Refuses on a git
+// checkout so an errant teardown can't wipe a working tree. Returns true only if
+// the directory was actually removed.
+function removeInstallDir() {
+  if (isGitCheckout()) {
+    broadcast({ type: "log", line: `[remove] ${ROOT} is a git checkout — leaving it in place.` });
+    return false;
+  }
+  broadcast({ type: "log", line: `[remove] Removing ${ROOT}…` });
+  try { fs.rmSync(ROOT, { recursive: true, force: true }); return true; }
+  catch (e) { broadcast({ type: "log", line: `[remove] Could not remove ${ROOT}: ${e.message}` }); return false; }
+}
+
+// Prep a DO station for storage and power it off. Order is deliberate: we confirm
+// a shutdown command is actually *accepted* before deleting the install dir, so a
+// machine that can't power off (e.g. macOS Automation permission denied) is left
+// fully intact and recoverable rather than wiped-but-still-on. The power-off
+// commands schedule with a short delay and return immediately, giving this
+// process time to remove its own files before the OS goes down. End state: the
+// machine shuts down and the install folder no longer exists.
 async function shutdownMachine() {
-  broadcast({ type: "log", line: "[shutdown] Powering off…" });
+  const home = process.env.HOME || process.env.USERPROFILE || "/";
+
+  // Container teardown must happen while docker-compose.yml still exists.
+  broadcast({ type: "log", line: "[shutdown] Tearing down ShellPort container…" });
+  await run(`docker compose -f "${path.join(ROOT, "docker-compose.yml")}" down -v --remove-orphans`, { cwd: ROOT, stream: true }).catch(() => {});
+
+  // Verify shutdown capability first. Each command schedules a power-off and
+  // returns immediately; a non-zero exit means we lack the rights, so we try the
+  // next. If none succeed we abort WITHOUT deleting anything.
+  broadcast({ type: "log", line: "[shutdown] Scheduling power-off…" });
   const cmds = IS_WIN
-    ? [`Stop-Computer -Force`]
+    ? [`shutdown /s /f /t 20`]
     : process.platform === "darwin"
       ? [`osascript -e 'tell application "System Events" to shut down'`, `shutdown -h now`]
-      : [`systemctl poweroff`, `shutdown -h now`];
+      : [`shutdown -h +1`, `systemctl poweroff`, `shutdown -h now`];
+
+  let initiated = false;
   for (const cmd of cmds) {
-    try { await run(cmd); return; }
+    try { await run(cmd, { cwd: home }); initiated = true; broadcast({ type: "log", line: `[shutdown] Power-off accepted via "${cmd}".` }); break; }
     catch (e) { broadcast({ type: "log", line: `[shutdown] "${cmd}" failed: ${e.message}` }); }
   }
-  broadcast({ type: "log", line: "[shutdown] Could not power off automatically — shut down manually." });
+
+  if (!initiated) {
+    broadcast({ type: "log", line: "[shutdown] Could not power off automatically — leaving the install in place so this machine stays recoverable. Shut down manually." });
+    return;
+  }
+
+  // Shutdown is confirmed and pending — safe to remove our own files now.
+  removeInstallDir();
+  broadcast({ type: "log", line: "[shutdown] Clean. Powering off…" });
 }
 
 // ── Pre-interview validation ─────────────────────────────────────────────────
@@ -872,23 +965,54 @@ function spawnTerminal(inner, manual) {
   return new Promise((resolve) => {
     const ok = () => resolve({ ok: true });
     const fail = (reason) => resolve({ ok: false, reason, command: manual });
+
+    // Write the command to a temp script and launch the terminal against the
+    // script path. This avoids nesting the (arbitrary) command inside osascript
+    // / shell quoting, which is what made most "Run in terminal" buttons fail.
+    const stamp = Date.now().toString(36) + crypto.randomBytes(3).toString("hex");
+    let scriptPath;
+    try {
+      if (IS_WIN) {
+        scriptPath = path.join(os.tmpdir(), "shellport-fix-" + stamp + ".ps1");
+        const body =
+          "Set-Location -LiteralPath '" + ROOT.replace(/'/g, "''") + "'\n" +
+          inner + "\n" +
+          "Write-Host ''\n" +
+          "Write-Host '[ShellPort] Done — this window can be closed.'\n";
+        fs.writeFileSync(scriptPath, body);
+      } else {
+        scriptPath = path.join(os.tmpdir(), "shellport-fix-" + stamp + ".sh");
+        const body =
+          "#!/usr/bin/env bash\n" +
+          'cd "' + ROOT + '" 2>/dev/null\n' +
+          inner + "\n" +
+          'echo\n' +
+          'echo "[ShellPort] Done — this window can be closed."\n' +
+          "exec bash -l\n";
+        fs.writeFileSync(scriptPath, body, { mode: 0o700 });
+      }
+    } catch (e) {
+      return fail("Could not stage terminal command: " + e.message);
+    }
+
     if (process.platform === "darwin") {
       const hasITerm = fs.existsSync("/Applications/iTerm.app");
+      // scriptPath is an alphanumeric temp path — safe to embed unquoted-ish.
       const appCmd = hasITerm
-        ? "osascript -e 'tell application \"iTerm\" to create window with default profile command \"bash -lc \\\"" + inner.replace(/"/g, '\\\\\\"') + "\\\"\"' -e 'tell application \"iTerm\" to activate'"
-        : "osascript -e 'tell application \"Terminal\" to do script \"" + inner.replace(/"/g, '\\\\"') + "\"' -e 'tell application \"Terminal\" to activate'";
+        ? "osascript -e 'tell application \"iTerm\" to create window with default profile command \"bash " + scriptPath + "\"' -e 'tell application \"iTerm\" to activate'"
+        : "osascript -e 'tell application \"Terminal\" to do script \"bash " + scriptPath + "\"' -e 'tell application \"Terminal\" to activate'";
       run(appCmd).then(ok).catch(() => fail("Could not open Terminal"));
     } else if (IS_WIN) {
-      const wtCmd = "wt -d \"" + ROOT + "\" pwsh -NoExit -Command \"" + inner.replace(/"/g, '\\"') + "\"";
-      const fallback = "start powershell -NoExit -Command \"" + inner.replace(/"/g, '\\"') + "\"";
+      const wtCmd = "wt -d \"" + ROOT + "\" powershell -NoExit -ExecutionPolicy Bypass -File \"" + scriptPath + "\"";
+      const fallback = "start powershell -NoExit -ExecutionPolicy Bypass -File \"" + scriptPath + "\"";
       run(wtCmd).then(ok).catch(() => run(fallback).then(ok).catch(() => fail("No terminal found")));
     } else {
       const emus = ["gnome-terminal", "konsole", "xterm", "x-terminal-emulator"];
       const found = emus.find((e) => findBin([], [e]));
       if (!found) return fail("No terminal emulator found");
       const cmd = found === "gnome-terminal"
-        ? "gnome-terminal -- bash -c '" + inner.replace(/'/g, "'\\''") + "; exec bash'"
-        : found + " -e bash -c '" + inner.replace(/'/g, "'\\''") + "; exec bash'";
+        ? "gnome-terminal -- bash " + scriptPath
+        : found + " -e bash " + scriptPath;
       run(cmd).then(ok).catch(() => fail("Could not open terminal"));
     }
   });
@@ -959,8 +1083,10 @@ function findFix(id) {
   return FIXES.trouble.concat(FIXES.manual, [FIXES.emergency]).find((f) => f.id === id && f.run);
 }
 
-// Cleanup — container teardown only, safe on any machine.
-async function cleanup() {
+// Cleanup — container teardown, safe on any machine. With removeInstall (the
+// candidate "Reset & remove ShellPort" action) it also deletes ShellPort's own
+// install directory and stops the server — BYOD only.
+async function cleanup(removeInstall = false) {
   if (state.status === "cleanup" || state.status === "done") return;
   updateStatus("cleanup");
   resetProgress("cleanup");
@@ -1028,6 +1154,18 @@ async function cleanup() {
   setTarget(100, "cleanup");
   updateStatus("done");
   broadcast({ type: "cleanup_complete", issues });
+
+  // Candidate "Reset & remove ShellPort" (BYOD only): ShellPort's container,
+  // volume and session files are gone — now remove the install directory itself
+  // and stop the server. We only ever touch ShellPort's own footprint, never
+  // anything the candidate did outside the app (browser sessions, Google
+  // sign-ins, downloaded docs) and never on a managed DO station.
+  if (removeInstall && !ADMIN_MODE) {
+    if (removeInstallDir()) {
+      broadcast({ type: "log", line: "[remove] ShellPort removed. Stopping server." });
+      setTimeout(() => process.exit(0), 500);
+    }
+  }
 }
 
 // Clear per-session state before a reset / recycle / end-event.
@@ -1434,6 +1572,10 @@ const server = http.createServer((req, res) => {
   // Run a troubleshooting / manual-fallback command in a native terminal. The
   // client sends only a known fix id; the command itself is server-defined.
   if (url.pathname === "/api/run-fix" && req.method === "POST") {
+    // Troubleshooting is candidate-usable on BYOD (it's their own machine), but on
+    // a managed DO station the fixes (incl. teardown/remove) are admin-gated so a
+    // candidate session can't reach them.
+    if (ADMIN_MODE && !requireAuth(req, res)) return;
     let body = "";
     req.on("data", (c) => (body += c));
     req.on("end", () => {
@@ -1473,7 +1615,7 @@ const server = http.createServer((req, res) => {
     const pdfPath = path.join(ROOT, "question.pdf");
     fs.readFile(pdfPath, (err, data) => {
       if (err) { res.writeHead(404); res.end("Not found"); return; }
-      res.writeHead(200, { "Content-Type": "application/pdf", "Content-Disposition": "inline; filename=\"question.pdf\"" });
+      res.writeHead(200, { "Content-Type": "application/pdf", "Content-Disposition": "inline; filename=\"question.pdf\"", "Cache-Control": "no-store, must-revalidate", "Pragma": "no-cache" });
       res.end(data);
     });
     return;
@@ -1495,9 +1637,15 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (url.pathname === "/api/cleanup" && req.method === "POST") {
-    cleanup();
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ started: true }));
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      let remove = false;
+      try { remove = !!JSON.parse(body || "{}").remove; } catch (_) {}
+      cleanup(remove);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ started: true }));
+    });
     return;
   }
   // Recycle for the next candidate (DO station).
