@@ -28,7 +28,7 @@ body{font-family:var(--body);background:var(--bg);color:var(--tx);min-height:100
 .tab.on{color:var(--txhi);border-bottom-color:var(--acc)}
 .rec{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
 .rd{width:6px;height:6px;border-radius:50%;background:var(--alert);position:relative}
-.nbtn{width:28px;height:28px;border:1px solid var(--hair);border-radius:5px;background:transparent;color:var(--tx);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px}.nbtn:hover{border-color:var(--hair2)}
+.nbtn{width:28px;height:28px;border:1px solid var(--hair);border-radius:5px;background:transparent;color:var(--tx);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px}.nbtn:hover{border-color:var(--hair2)}.nbtn.on{border-color:var(--acc);color:var(--acc)}
 .body{padding:40px 40px 64px}.body-in{max-width:680px;margin:0 auto}
 .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim);display:flex;align-items:center;gap:10px;margin-bottom:18px}
 .lbl .ln{flex:1;height:1px;background:var(--hair)}.lbl .ct{color:var(--acc)}.lbl .ca{color:var(--alert)}
@@ -315,7 +315,8 @@ function scrTrouble(){
   const fx=S.fixes||{}, tr=fx.trouble||[], em=fx.emergency;
   let h='<div class="lbl"><span>Troubleshooting — quick fixes</span><span class="ln"></span></div>'
     +'<h1>When something <span class="it">won\'t cooperate</span>.</h1>'
-    +'<p class="lede">The common failure at each step and the one command that clears it — run it right here, or copy it. If none apply, use the emergency reset or the manual fallback.</p><div class="sec">';
+    +'<p class="lede">The common failure at each step and the one command that clears it — run it right here, or copy it. If none apply, use the emergency reset or the manual fallback.</p>'
+    +'<div class="qc al" style="margin:0 0 6px">These run real commands on your computer. ShellPort only ever touches its own container, files and folder — your other apps, browser sign-ins and downloads are left untouched.</div><div class="sec">';
   tr.forEach((t,i)=>h+=fixRow(i+1,t));
   h+='</div>';
   if(em){
@@ -330,7 +331,8 @@ function scrManual(){
   const mn=(S.fixes||{}).manual||[];
   let h='<div class="lbl"><span>Manual fallback — if nothing else works</span><span class="ln"></span></div>'
     +'<h1>Run every step by <span class="it">hand</span>.</h1>'
-    +'<p class="lede">If the dashboard fails on any machine, the whole flow works from a terminal. Run each step here, or copy it — in order.</p><div class="sec">';
+    +'<p class="lede">If the dashboard fails on any machine, the whole flow works from a terminal. Run each step here, or copy it — in order.</p>'
+    +'<div class="qc al" style="margin:0 0 6px">These run real commands on your computer. ShellPort only ever touches its own container, files and folder — your other apps, browser sign-ins and downloads are left untouched. "Remove ShellPort entirely" deletes ShellPort and your interview work.</div><div class="sec">';
   mn.forEach((t,i)=>h+=fixRow(i+1,t));
   return h+'</div><div class="actions"><button class="alink n" data-go="back">← Back</button></div>';
 }
@@ -369,6 +371,11 @@ function renderNav(){
   $('vbadge').textContent=vbadgeLabel();
   const view=curView();
   let r='';
+  // Troubleshooting: a candidate can fix their own (BYOD) machine, so it's always
+  // available there. On a managed DO station it's gated behind admin unlock so a
+  // candidate session can't reach teardown/remove commands.
+  const showHelp = !S.adminMode || (view==='admin' && ui.unlocked);
+  if(showHelp) r+='<button class="nbtn'+(ui.help?' on':'')+'" data-act="help" title="Troubleshooting"><i class="ti ti-lifebuoy"></i></button>';
   if(view==='admin'){
     if(ui.unlocked){
       r+='<div class="tabs">'
@@ -379,7 +386,6 @@ function renderNav(){
     }
     r+='<button class="nbtn" data-act="exit" title="Exit admin"><i class="ti ti-x"></i></button>';
   } else {
-    if(S.adminAvailable) r+='<button class="nbtn" data-act="help" title="Troubleshooting"><i class="ti ti-lifebuoy"></i></button>';
     if(S.adminAvailable) r+='<button class="nbtn" data-act="lock" title="Admin"><i class="ti ti-lock"></i></button>';
   }
   r+='<button class="nbtn" data-act="theme" title="Theme"><i class="ti ti-'+(resolveTheme()==='dark'?'sun':'moon')+'"></i></button>';
@@ -403,7 +409,7 @@ $('rsp').addEventListener('click',e=>{
   if(a==='theme'){sessionTheme=resolveTheme()==='dark'?'light':'dark';render()}
   else if(a==='lock'){ui.view='admin';ui.tab='settings';ui.help=null;render()}
   else if(a==='exit'){ui.view='auto';ui.help=null;render()}
-  else if(a==='help'){ui.help='troubleshoot';render()}
+  else if(a==='help'){ui.help=ui.help?null:'troubleshoot';render()}
 });
 $('logo').addEventListener('click',()=>{if(curView()==='admin'){ui.view='auto';render()}});
 
@@ -483,11 +489,19 @@ async function openTerminal(el){
     }
   }catch(_){}
 }
+// Fixes that stop the environment or delete ShellPort — warn before running.
+const DESTRUCTIVE_FIXES=['m-remove','m-down','emergency'];
 async function runFix(id,el){
+  if(DESTRUCTIVE_FIXES.includes(id)){
+    const ok=confirm('This runs a real command on your computer. It only affects ShellPort — it can stop the environment or delete ShellPort and your interview work, but your other apps, browser sign-ins and files are left untouched.\n\nContinue?');
+    if(!ok)return;
+  }
   const label=el?el.innerHTML:'';
   if(el){el.disabled=true;el.innerHTML='<i class="ti ti-loader"></i>Opening…'}
   try{
-    const r=await fetch('/api/run-fix',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
+    const headers={'Content-Type':'application/json'};
+    if(adminToken)headers['Authorization']='Bearer '+adminToken;
+    const r=await fetch('/api/run-fix',{method:'POST',headers,body:JSON.stringify({id})});
     const d=await r.json();
     if(el){el.disabled=false;el.innerHTML=label}
     if(!d.ok&&el){
@@ -533,7 +547,9 @@ async function rerollQuestion(){try{await authedFetch('/api/reroll',{method:'POS
 async function toggleQuestionVisibility(){try{await fetch('/api/question-toggle',{method:'POST'})}catch(_){}}
 async function endInterview(){
   ui.localComplete=false;
-  try{await fetch('/api/cleanup',{method:'POST'})}catch(_){}
+  // Candidate (BYOD): remove ShellPort's own footprint AND its install folder,
+  // then the server stops. Nothing the candidate did outside the app is touched.
+  try{await fetch('/api/cleanup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({remove:true})})}catch(_){}
 }
 async function adminReset(){
   if(!confirm('Reset this workstation for the next candidate? This scrubs the host and rebuilds the environment.'))return;

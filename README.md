@@ -68,6 +68,8 @@ Credential isolation is enforced via `devcontainer.json`: IDE settings block Git
 
 Interviewer surfaces — Settings, telemetry, Recycle, End Event — are gated behind an admin unlock (the machine's OS-user password; no separate admin password) and never appear on a BYOD machine. Before each interview ShellPort confirms the host is clean and holds setup until any residue is cleared.
 
+The troubleshooting panel (common fixes plus the manual fallback) is always available to a candidate on their own BYOD machine so they can recover unaided — destructive commands carry a warning and a confirm. On a managed DO station it is gated behind the same admin unlock, so a candidate session can't reach teardown/remove commands.
+
 ---
 
 ## Optional Features
@@ -78,7 +80,7 @@ Off by default. Enable via `.env` or a config URL.
 |---|---|---|
 | Timer | `ENABLE_TIMER=true` | Live active/idle countdown. On expiry: NOTIFY, LOCK, or WIPE. Idle defined by `INACTIVITY_TIMEOUT_MINUTES`. |
 | Telemetry | `ENABLE_TELEMETRY=true` | Exports shell history, AI usage, and Git activity on cleanup. |
-| Questions | `QUESTIONS_URL=…` | Loads the assigned question during setup. Source is a **Google Sheet** of `[title, docId]` rows (`QUESTION_ROW` pins the row) or a **Google Doc with one question per tab** (`QUESTION_TAB`, or paste the link with the tab selected). `QUESTION_WEBHOOK` posts the chosen question. The source is never sent to the candidate view — only the rendered question. |
+| Questions | `QUESTIONS_URL=…` | Loads the assigned question during setup. Source is a **Google Sheet** of `[title, docId]` rows (`QUESTION_ROW` pins the row) or a **Google Doc with one question per tab** — all tabs are detected automatically and one is assigned at random (set `QUESTION_TAB=t.<id>` to pin a specific tab). `QUESTION_WEBHOOK` posts the chosen question. The source is never sent to the candidate view — only the rendered question. |
 | Question delivery | `QUESTION_DELIVERY=auto` | `auto` renders inline, falls back to PDF; `inline`; `pdf`; `none`. |
 | Editors | `ENABLED_EDITORS=…` | Comma-separated allow-list of local editors (e.g. `VS Code,Cursor`). Empty offers every detected editor. |
 | Terminal | `TERMINAL_ACCESS=false` | Hides the "Start in terminal" button. Default `true`. |
