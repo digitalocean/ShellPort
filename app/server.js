@@ -294,12 +294,15 @@ function detectIDEs() {
   const PF = process.env.ProgramFiles || "C:\\Program Files";
   const LAD = process.env.LOCALAPPDATA || path.join(HOME, "AppData", "Local");
 
+  // Prefer the GUI .exe over the bin\*.cmd launcher: launching the .exe directly
+  // avoids cmd.exe entirely, so paths with spaces ("Microsoft VS Code") aren't
+  // mangled by cmd's quote-stripping. The .cmd stays as a fallback.
   const localDefs = IS_WIN ? [
-    { name: "VS Code",          bins: ["code.cmd"],          paths: [`${PF}\\Microsoft VS Code\\bin\\code.cmd`, `${LAD}\\Programs\\Microsoft VS Code\\bin\\code.cmd`] },
-    { name: "VS Code Insiders", bins: ["code-insiders.cmd"], paths: [`${PF}\\Microsoft VS Code Insiders\\bin\\code-insiders.cmd`, `${LAD}\\Programs\\Microsoft VS Code Insiders\\bin\\code-insiders.cmd`] },
-    { name: "Cursor",           bins: ["cursor.cmd"],        paths: [`${LAD}\\Programs\\cursor\\resources\\app\\bin\\cursor.cmd`, `${LAD}\\Programs\\cursor\\Cursor.exe`] },
-    { name: "Windsurf",         bins: ["windsurf.cmd"],      paths: [`${LAD}\\Programs\\Windsurf\\bin\\windsurf.cmd`, `${LAD}\\Programs\\windsurf\\Windsurf.exe`] },
-    { name: "VSCodium",         bins: ["codium.cmd"],        paths: [`${LAD}\\Programs\\VSCodium\\bin\\codium.cmd`] },
+    { name: "VS Code",          bins: ["code.cmd"],          paths: [`${PF}\\Microsoft VS Code\\Code.exe`, `${LAD}\\Programs\\Microsoft VS Code\\Code.exe`, `${PF}\\Microsoft VS Code\\bin\\code.cmd`, `${LAD}\\Programs\\Microsoft VS Code\\bin\\code.cmd`] },
+    { name: "VS Code Insiders", bins: ["code-insiders.cmd"], paths: [`${PF}\\Microsoft VS Code Insiders\\Code - Insiders.exe`, `${LAD}\\Programs\\Microsoft VS Code Insiders\\Code - Insiders.exe`, `${PF}\\Microsoft VS Code Insiders\\bin\\code-insiders.cmd`, `${LAD}\\Programs\\Microsoft VS Code Insiders\\bin\\code-insiders.cmd`] },
+    { name: "Cursor",           bins: ["cursor.cmd"],        paths: [`${LAD}\\Programs\\cursor\\Cursor.exe`, `${LAD}\\Programs\\cursor\\resources\\app\\bin\\cursor.cmd`] },
+    { name: "Windsurf",         bins: ["windsurf.cmd"],      paths: [`${LAD}\\Programs\\Windsurf\\Windsurf.exe`, `${LAD}\\Programs\\Windsurf\\bin\\windsurf.cmd`] },
+    { name: "VSCodium",         bins: ["codium.cmd"],        paths: [`${LAD}\\Programs\\VSCodium\\VSCodium.exe`, `${LAD}\\Programs\\VSCodium\\bin\\codium.cmd`] },
   ] : process.platform === "darwin" ? [
     { name: "VS Code",          bins: ["code"],          paths: ["/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"] },
     { name: "VS Code Insiders", bins: ["code-insiders"], paths: ["/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code-insiders"] },
@@ -1059,12 +1062,21 @@ async function launchIDE(ideName) {
       const hexPath = Buffer.from(ROOT).toString("hex");
       const uri = `vscode-remote://dev-container+${hexPath}/workspaces`;
       const args = ["--new-window", "--folder-uri", uri];
-      // spawn with an argv array (not an exec string) so Node quotes the editor
-      // path correctly — a string command split at the space in "Microsoft VS
-      // Code". On Windows the CLI is a .cmd, which must be run via cmd.exe.
-      const child = IS_WIN
-        ? spawn("cmd.exe", ["/c", ide.path, ...args], { detached: true, stdio: "ignore", windowsHide: true })
-        : spawn(ide.path, args, { detached: true, stdio: "ignore" });
+      let child;
+      if (IS_WIN && /\.exe$/i.test(ide.path)) {
+        // Launch the .exe directly — no cmd.exe, so CreateProcess quotes the path
+        // (incl. spaces like "Microsoft VS Code") correctly. Most reliable.
+        child = spawn(ide.path, args, { detached: true, stdio: "ignore", windowsHide: true });
+      } else if (IS_WIN) {
+        // Fallback for a .cmd launcher. cmd.exe /s strips ONLY the outermost quote
+        // pair, so wrap the whole command in an extra pair; verbatim args stop Node
+        // from re-quoting. (Plain `cmd /c "path" … "uri"` would have its first/last
+        // quote stripped, un-quoting the path — the original bug.)
+        const line = `""${ide.path}" --new-window --folder-uri "${uri}""`;
+        child = spawn("cmd.exe", ["/d", "/s", "/c", line], { detached: true, stdio: "ignore", windowsHide: true, windowsVerbatimArguments: true });
+      } else {
+        child = spawn(ide.path, args, { detached: true, stdio: "ignore" });
+      }
       child.on("error", (err) => broadcast({ type: "log", line: `[launch] ${ideName} failed: ${err.message}` }));
       child.unref();
       return { launched: ideName };
