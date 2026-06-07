@@ -7,8 +7,7 @@ const { exec, spawn } = require("child_process");
 const crypto = require("crypto");
 const { WebSocketServer } = require("ws");
 
-// HTTP client (follows redirects). Pure Node so we never shell out to curl,
-// whose quoting/availability differs across hosts and broke this on Windows.
+// HTTP client with redirect following.
 function httpRequest(url, opts = {}) {
   const { method = "GET", headers = {}, body = null, maxRedirects = 5, maxBytes = 10_000_000, timeout = 20000, binary = false } = opts;
   return new Promise((resolve, reject) => {
@@ -48,12 +47,10 @@ function httpRequest(url, opts = {}) {
 const PORT = process.env.PORT || 3000;
 const ROOT = path.resolve(__dirname, "..");
 const IS_WIN = process.platform === "win32";
+// "admin" dir present = managed DO station (aggressive scrub + admin panel);
+// absent = candidate BYOD (only ShellPort's own footprint is removed).
 const ADMIN_MODE = fs.existsSync(path.join(ROOT, "admin"));
-// DO-owned interview station (admin marker present, aggressive host scrub allowed)
-// vs candidate BYOD (no marker — only ShellPort's own footprint may be removed).
 const MACHINE_TYPE = ADMIN_MODE ? "do" : "byod";
-// Managed (DO station, candidate-facing) exposes a password-gated admin panel;
-// candidate (BYOD) never does.
 const VIEW_MODE = ADMIN_MODE ? "managed" : "candidate";
 
 // Admin-set appearance preset, inherited by candidate/managed screens.
@@ -269,8 +266,7 @@ function findBin(candidatePaths, pathNames = []) {
   return null;
 }
 
-// Non-interactive keychain fingerprint: `security dump-keychain` pops a GUI
-// prompt that can hang the server, so we hash each *.keychain-db's size+mtime.
+// Hash each keychain-db's size+mtime (avoids the GUI prompt from dump-keychain).
 function keychainFingerprint() {
   try {
     const dir = path.join(process.env.HOME || "", "Library", "Keychains");
@@ -328,14 +324,11 @@ function detectIDEs() {
   state.ides = ides;
 }
 
-// Common host locations a candidate might save work to OUTSIDE the container.
-// Work here is NOT in the named volume, so the volume teardown can't remove it.
+// Host locations a candidate might save work to outside the container volume.
 const WORK_DIRS = ["Desktop", "Documents", "Downloads"].map((d) =>
   path.join(process.env.HOME || process.env.USERPROFILE || "", d));
 
-// Recursively list every file (absolute paths) under the work dirs. Pure Node so
-// it behaves identically on every host, never shells out, and never follows
-// symlinks (so it can't escape the work dirs).
+// All files (absolute paths) under the work dirs, recursive, not following symlinks.
 function listWorkFiles() {
   const out = [];
   const walk = (dir) => {
@@ -366,18 +359,16 @@ async function captureSnapshot() {
       snapshot.credentials.keychainFingerprint = keychainFingerprint();
     }
   } catch (_) {}
-  // Baseline inventory of the host work dirs, so a later reset can remove ONLY the
-  // files the candidate adds — never pre-existing station files. `captured` lets the
-  // scrub tell "genuinely empty" from "never captured" and refuse to delete blind.
+  // Baseline of the work dirs so a reset removes only files added since. `captured`
+  // distinguishes "empty" from "never captured" so the scrub won't delete blind.
   snapshot.work = { captured: true, dirs: WORK_DIRS, baseline: listWorkFiles() };
   state.snapshot = snapshot;
   fs.writeFileSync(path.join(ROOT, ".session_snapshot.json"), JSON.stringify(snapshot, null, 2));
   addStep("snapshot", "Pre-install state captured", "done");
 }
 
-// Remove candidate work saved OUTSIDE the container, deleting ONLY files added
-// since the pre-session snapshot — pre-existing station files are preserved.
-// Managed (aggressive) reset only; writes .last_scrub.json for validation.
+// Delete files added to the work dirs since the snapshot (pre-existing ones kept).
+// Writes .last_scrub.json for validation.
 function scrubContainmentLeak() {
   const snap = state.snapshot;
   if (!snap || !snap.work || !snap.work.captured || !Array.isArray(snap.work.baseline)) {
@@ -435,10 +426,8 @@ function cleanDocHtml(htmlRaw) {
     .trim();
 }
 
-// List a Google Doc's tabs (id + title) by scraping the public /preview page —
-// the export endpoints don't reveal tab IDs and we have no API credentials. The
-// first tab exports as "t.0"; the rest carry their own t.<id>. Returns [] for a
-// non-tabbed doc, or if the page can't be read, so callers fall back gracefully.
+// Tab ids + titles, scraped from the doc's /preview page (export endpoints don't
+// expose tab ids). First tab is "t.0"; rest carry their own t.<id>. [] if non-tabbed.
 async function listDocTabs(docId) {
   try {
     const resp = await httpRequest(`https://docs.google.com/document/d/${docId}/preview`);
@@ -461,9 +450,8 @@ async function listDocTabs(docId) {
   }
 }
 
-// Export a Google Doc (optionally one tab) to question.pdf for the in-page
-// reader / remote handoff. Cache-busts the URL so a re-rolled question never
-// shows a stale PDF; silent no-op if the export isn't a real PDF.
+// Export a doc (or one tab) to question.pdf with a cache-busting URL. No-op unless
+// the response is a real PDF.
 async function exportQuestionPdf(docId, tab) {
   const tabParam = tab ? `&tab=${encodeURIComponent(tab)}` : "";
   try {
@@ -476,11 +464,8 @@ async function exportQuestionPdf(docId, tab) {
   } catch (_) { state.questionPdf = null; }
 }
 
-// Render a single Google Doc tab as the assigned question: export a PDF copy for
-// the in-page reader, and clean HTML for the inline view. `tabTitle`/`locator`,
-// when the caller has already resolved the tab, override the title/locator that
-// would otherwise be derived from the exported body (per-tab exports carry no
-// heading, so the tab name is the authoritative title).
+// Render one doc tab as the question (PDF for the reader + clean HTML for inline).
+// tabTitle/locator from the caller override values derived from the body.
 async function renderDocQuestion(docId, tab, tabTitle, locator) {
   const tabParam = tab ? `&tab=${encodeURIComponent(tab)}` : "";
   addStep("question", "Loading formatted question", "running");
@@ -536,10 +521,8 @@ async function fetchQuestion() {
     const docsMatch = url.match(/docs\.google\.com\/document\/d\/([a-zA-Z0-9_-]+)/);
     if (docsMatch) {
       const docId = docsMatch[1];
-      // A pasted doc link always carries the currently-open tab (?tab=t.0), so we
-      // must NOT treat that as a pin — only an explicit QUESTION_TAB pins. With no
-      // pin we detect every tab and randomly assign one (re-rolls on reroll) — the
-      // doc equivalent of random row selection from a sheet.
+      // Only QUESTION_TAB pins a tab (a pasted link's ?tab= is ignored, so it can't
+      // pin by accident). With no pin, detect all tabs and assign one at random.
       const pinned = (state.config.QUESTION_TAB || "").trim();
       const tabs = await listDocTabs(docId);
       let tab = "", tabTitle = null, locator = "whole doc";
@@ -632,18 +615,15 @@ async function fetchQuestion() {
   }
 }
 
-// Re-send the notification for the question currently assigned. Used when the
-// interviewer fills in the candidate name after the question was already loaded,
-// so the posted record carries who/what/where.
+// Re-send the current assignment's notification (e.g. after the candidate name is
+// filled in post-assignment).
 function notifyAssignment() {
   if (state.lastAssignment) fireQuestionWebhook(state.lastAssignment.title, state.lastAssignment.source);
 }
 
-// Notify the hiring team that a question was assigned. Captures candidate name,
-// machine, and the question. Prefers a Slack App bot token (chat.postMessage —
-// posts to any channel, the right fit across multiple hiring blitzes); falls back
-// to a single-channel incoming webhook URL. `source` is a human-readable locator
-// (a sheet row "row 4" or a doc tab title).
+// Notify the hiring team of an assignment (candidate, machine, question). Prefers a
+// Slack App bot token (chat.postMessage, any channel); falls back to a single-channel
+// incoming webhook. `source` is a sheet row or doc-tab locator.
 async function fireQuestionWebhook(title, source) {
   state.lastAssignment = { title, source };
 
@@ -732,9 +712,8 @@ async function getMachineSerial() {
 }
 
 // ── Admin authentication ─────────────────────────────────────────────────────
-// Privileged actions are gated on proving OS-admin rights (not a ShellPort
-// secret): the DO candidate account can't unlock, the interviewer/IT one can;
-// on BYOD the owner self-resets. A challenge mints a short-lived bearer token.
+// Privileged actions are gated on OS-admin rights (no ShellPort secret); proving
+// them mints a short-lived bearer token.
 const adminTokens = new Map(); // token -> expiresAt (ms)
 const TOKEN_TTL = 30 * 60 * 1000;
 
@@ -797,7 +776,7 @@ function verifyOsPassword(password) {
       let derr = "";
       p.stderr.on("data", (d) => (derr += d));
       p.on("close", (code) => {
-        if (code !== 0) console.error(`[admin-unlock] dscl -authonly failed for "${user}" (exit ${code})${derr ? ": " + derr.trim() : ""} — the typed value is not this account's local password (e.g. SSO/company password differs from the local one).`);
+        if (code !== 0) console.error(`[admin-unlock] dscl -authonly failed for "${user}" (exit ${code})${derr ? ": " + derr.trim() : ""}`);
         resolve(code === 0);
       });
       p.on("error", (e) => { console.error(`[admin-unlock] dscl spawn error: ${e.message}`); resolve(false); });
@@ -822,15 +801,13 @@ function uninstallCommand() {
     : `rm -rf "${ROOT}"`;
 }
 
-// Release installs are extracted from a tarball (no .git); a .git here means a
-// dev/manual checkout. We never delete a working tree.
+// A .git here means a dev/manual checkout — never delete a working tree.
 function isGitCheckout() {
   return fs.existsSync(path.join(ROOT, ".git"));
 }
 
-// Remove ShellPort's own install directory — and nothing else. Refuses on a git
-// checkout so an errant teardown can't wipe a working tree. Returns true only if
-// the directory was actually removed.
+// Remove ShellPort's install directory (skipped on a git checkout). Returns true
+// if it was removed.
 function removeInstallDir() {
   if (isGitCheckout()) {
     broadcast({ type: "log", line: `[remove] ${ROOT} is a git checkout — leaving it in place.` });
@@ -841,13 +818,8 @@ function removeInstallDir() {
   catch (e) { broadcast({ type: "log", line: `[remove] Could not remove ${ROOT}: ${e.message}` }); return false; }
 }
 
-// Prep a DO station for storage and power it off. Order is deliberate: we confirm
-// a shutdown command is actually *accepted* before deleting the install dir, so a
-// machine that can't power off (e.g. macOS Automation permission denied) is left
-// fully intact and recoverable rather than wiped-but-still-on. The power-off
-// commands schedule with a short delay and return immediately, giving this
-// process time to remove its own files before the OS goes down. End state: the
-// machine shuts down and the install folder no longer exists.
+// Power off a DO station and remove the install dir. A shutdown command must be
+// accepted BEFORE deleting, so a machine that can't power off stays recoverable.
 async function shutdownMachine() {
   const home = process.env.HOME || process.env.USERPROFILE || "/";
 
@@ -855,9 +827,7 @@ async function shutdownMachine() {
   broadcast({ type: "log", line: "[shutdown] Tearing down ShellPort container…" });
   await run(`docker compose -f "${path.join(ROOT, "docker-compose.yml")}" down -v --remove-orphans`, { cwd: ROOT, stream: true }).catch(() => {});
 
-  // Verify shutdown capability first. Each command schedules a power-off and
-  // returns immediately; a non-zero exit means we lack the rights, so we try the
-  // next. If none succeed we abort WITHOUT deleting anything.
+  // Try each power-off command; abort without deleting if none is accepted.
   broadcast({ type: "log", line: "[shutdown] Scheduling power-off…" });
   const cmds = IS_WIN
     ? [`shutdown /s /f /t 20`]
@@ -978,9 +948,7 @@ async function setup() {
     setTarget(15, "setup");
 
     addStep("build", "Building container", "running");
-    // Windows runs via `powershell -Command`, where a quoted executable path is a
-    // string expression, not an invocation — it needs the call operator (&) or it
-    // fails with "Unexpected token 'up'". bash invokes a quoted path directly.
+    // Windows runs via powershell; a quoted path needs the call operator (&).
     const invoke = IS_WIN ? "& " : "";
     await run(`${invoke}"${devcontainerCmd}" up --workspace-folder "${ROOT}" --remove-existing-container`, {
       stream: true, trackBuild: true, baseProgress: 15, weight: 60
@@ -1060,10 +1028,8 @@ async function launchIDE(ideName) {
       const uri = `vscode-remote://dev-container+${hexPath}/workspaces`;
 
       if (IS_WIN) {
-        // Route through the app's PowerShell run() wrapper with the call operator (&).
-        // PowerShell invokes a quoted path (incl. spaces like "Microsoft VS Code")
-        // correctly, unlike cmd.exe, whose first/last-quote stripping un-quotes the
-        // path. Validated on managed Windows stations.
+        // PowerShell's call operator (&) invokes a quoted path correctly, unlike
+        // cmd.exe (which un-quotes paths with spaces like "Microsoft VS Code").
         run(`& "${ide.path}" --new-window --folder-uri "${uri}"`).catch((err) => {
           broadcast({ type: "log", line: `[launch] ${ideName} failed: ${err.message}` });
         });
@@ -1096,9 +1062,7 @@ function spawnTerminal(inner, manual) {
     const ok = () => resolve({ ok: true });
     const fail = (reason) => resolve({ ok: false, reason, command: manual });
 
-    // Write the command to a temp script and launch the terminal against the
-    // script path. This avoids nesting the (arbitrary) command inside osascript
-    // / shell quoting, which is what made most "Run in terminal" buttons fail.
+    // Run the command from a temp script to avoid fragile nested osascript/shell quoting.
     const stamp = Date.now().toString(36) + crypto.randomBytes(3).toString("hex");
     let scriptPath;
     try {
@@ -1127,7 +1091,6 @@ function spawnTerminal(inner, manual) {
 
     if (process.platform === "darwin") {
       const hasITerm = fs.existsSync("/Applications/iTerm.app");
-      // scriptPath is an alphanumeric temp path — safe to embed unquoted-ish.
       const appCmd = hasITerm
         ? "osascript -e 'tell application \"iTerm\" to create window with default profile command \"bash " + scriptPath + "\"' -e 'tell application \"iTerm\" to activate'"
         : "osascript -e 'tell application \"Terminal\" to do script \"bash " + scriptPath + "\"' -e 'tell application \"Terminal\" to activate'";
@@ -1213,9 +1176,8 @@ function findFix(id) {
   return FIXES.trouble.concat(FIXES.manual, [FIXES.emergency]).find((f) => f.id === id && f.run);
 }
 
-// Cleanup — container teardown, safe on any machine. With removeInstall (the
-// candidate "Reset & remove ShellPort" action) it also deletes ShellPort's own
-// install directory and stops the server — BYOD only.
+// Container teardown, safe on any machine. With removeInstall it also deletes the
+// install dir and stops the server (BYOD only — the "Reset & remove" action).
 async function cleanup(removeInstall = false) {
   if (state.status === "cleanup" || state.status === "done") return;
   updateStatus("cleanup");
@@ -1285,11 +1247,8 @@ async function cleanup(removeInstall = false) {
   updateStatus("done");
   broadcast({ type: "cleanup_complete", issues });
 
-  // Candidate "Reset & remove ShellPort" (BYOD only): ShellPort's container,
-  // volume and session files are gone — now remove the install directory itself
-  // and stop the server. We only ever touch ShellPort's own footprint, never
-  // anything the candidate did outside the app (browser sessions, Google
-  // sign-ins, downloaded docs) and never on a managed DO station.
+  // Candidate "Reset & remove ShellPort" (BYOD only): remove the install dir and
+  // stop the server. Touches only ShellPort's own footprint.
   if (removeInstall && !ADMIN_MODE) {
     if (removeInstallDir()) {
       broadcast({ type: "log", line: "[remove] ShellPort removed. Stopping server." });
@@ -1515,10 +1474,8 @@ async function hostScrub(aggressive = true) {
   addStep("phase6", "Phase 6: Rebuild — complete", "done");
   setTarget(78, "setup");
 
-  // ── Phase 6.5: Containment leak — remove host files the candidate added ──
-  // since the pre-session snapshot (never pre-existing station files). Managed only
-  // (this whole branch is aggressive=ADMIN_MODE). Uses the in-memory snapshot, so it
-  // must run before the next setup's captureSnapshot overwrites it.
+  // ── Phase 6.5: Containment leak — remove host files added since the snapshot ──
+  // Uses the in-memory snapshot, before the next setup overwrites it.
   addStep("containment-leak", "Containment leak — removing files added since the snapshot", "running");
   setTarget(80, "setup");
   scrubContainmentLeak();
@@ -1603,11 +1560,8 @@ async function endEvent() {
   broadcast({ type: "status", status: "event_complete" });
 }
 
-// Config keys safe to expose to any client (incl. a candidate on a DO station).
-// Question sources (QUESTIONS_URL/QUESTION_ROW/QUESTION_TAB), notification secrets
-// (QUESTION_WEBHOOK, SLACK_BOT_TOKEN, SLACK_CHANNEL), and PII (CANDIDATE_NAME,
-// PROJECT_NAME) are withheld so a candidate cannot read them off the wire or reach
-// questions other than the one assigned to them.
+// Config keys safe to send to any client. Question sources, notification secrets,
+// and PII (candidate/project) are withheld so a candidate can't read them.
 const WIRE_CONFIG_KEYS = [
   "ENABLE_TIMER", "TIMEOUT_ACTION", "TIME_LIMIT_MINUTES", "INACTIVITY_TIMEOUT_MINUTES",
   "ENABLE_TELEMETRY", "MACHINE_LABEL", "ENABLED_EDITORS", "TERMINAL_ACCESS",
@@ -1718,9 +1672,7 @@ const server = http.createServer((req, res) => {
   // Run a troubleshooting / manual-fallback command in a native terminal. The
   // client sends only a known fix id; the command itself is server-defined.
   if (url.pathname === "/api/run-fix" && req.method === "POST") {
-    // Troubleshooting is candidate-usable on BYOD (it's their own machine), but on
-    // a managed DO station the fixes (incl. teardown/remove) are admin-gated so a
-    // candidate session can't reach them.
+    // Candidate-usable on BYOD; admin-gated on managed DO stations.
     if (ADMIN_MODE && !requireAuth(req, res)) return;
     let body = "";
     req.on("data", (c) => (body += c));

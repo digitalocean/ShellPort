@@ -10,14 +10,9 @@ $Repo = "digitalocean/shellport"
 $SelfUrl = "https://do.co/shellport-windows"   # canonical source of this installer
 $InstallDir = Join-Path $env:USERPROFILE "shellport"
 
-# ── MDM/SYSTEM re-exec (Windows) ──────────────────────────────────────────────
-# An MDM (Intune) runs scripts as SYSTEM, but ShellPort is per-user: it installs
-# to the user's profile, uses their Docker, and opens their browser. When we're
-# SYSTEM with a user logged in, re-launch this installer in that user's session
-# via a one-shot scheduled task (forwarding any SHELLPORT_* config) so the same
-# one-liner works interactively and via Intune.
-# Tip: setting the Intune script to "Run using the logged-on credentials = Yes"
-# (or a Win32 app with Install behavior = User) skips this block entirely.
+# MDM/SYSTEM re-exec (Windows): Intune runs as SYSTEM, but ShellPort is per-user.
+# When SYSTEM with a user logged in, re-launch in that user's session via a one-shot
+# scheduled task. (Intune "Run using logged-on credentials = Yes" skips this block.)
 if ([Security.Principal.WindowsIdentity]::GetCurrent().IsSystem) {
     $loggedIn = (Get-CimInstance Win32_ComputerSystem).UserName   # DOMAIN\user, or empty
     if (-not $loggedIn) {

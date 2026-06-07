@@ -14,13 +14,9 @@ REPO="digitalocean/shellport"
 SELF_URL="https://do.co/shellport-admin-mac"   # canonical source of this installer
 INSTALL_DIR="${HOME}/shellport"
 
-# ── MDM/root re-exec (macOS) ──────────────────────────────────────────────────
-# Jamf (and any MDM) runs scripts as root, but ShellPort is per-user: it installs
-# to ~/shellport, talks to the logged-in user's Docker, and opens their browser.
-# So when we're root on macOS with a desktop user present, re-run this installer
-# AS that user inside their GUI (Aqua) session — that makes HOME, PATH, Docker and
-# the browser all resolve correctly. Net effect: the same one-liner works both when
-# a person runs it and when Jamf runs it. (Linux/interactive runs skip this.)
+# MDM/root re-exec (macOS): ShellPort is per-user, but Jamf runs as root. When root
+# with a desktop user present, re-run as that user in their GUI session so HOME,
+# PATH, Docker and the browser resolve. Lets the one-liner work interactively and via MDM.
 if [ "$(uname)" = "Darwin" ] && [ "$(id -u)" -eq 0 ]; then
   consoleUser="$(/usr/bin/stat -f%Su /dev/console 2>/dev/null || true)"
   case "${consoleUser:-}" in

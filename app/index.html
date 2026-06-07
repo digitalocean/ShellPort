@@ -383,9 +383,7 @@ function renderNav(){
   $('vbadge').textContent=vbadgeLabel();
   const view=curView();
   let r='';
-  // Troubleshooting: a candidate can fix their own (BYOD) machine, so it's always
-  // available there. On a managed DO station it's gated behind admin unlock so a
-  // candidate session can't reach teardown/remove commands.
+  // Always available on BYOD; admin-gated on managed DO stations.
   const showHelp = !S.adminMode || (view==='admin' && ui.unlocked);
   if(showHelp) r+='<button class="nbtn'+(ui.help?' on':'')+'" data-act="help" title="Troubleshooting"><i class="ti ti-lifebuoy"></i></button>';
   if(view==='admin'){
@@ -558,8 +556,7 @@ async function saveSource(url){
   render();
   try{await authedFetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({QUESTIONS_URL:url})})}catch(_){}
 }
-// Admin-only text fields withheld from the wire (webhook, label, project): held
-// in adminCfg, saved through the auth-gated /api/config merge.
+// Save an admin-only field (held in adminCfg) via the auth-gated /api/config merge.
 async function saveAdminField(key,val){
   if(!adminCfg)adminCfg={};
   if(val===((adminCfg[key])||''))return;
@@ -570,8 +567,7 @@ async function rerollQuestion(){try{await authedFetch('/api/reroll',{method:'POS
 async function toggleQuestionVisibility(){try{await fetch('/api/question-toggle',{method:'POST'})}catch(_){}}
 async function endInterview(){
   ui.localComplete=false;
-  // Candidate (BYOD): remove ShellPort's own footprint AND its install folder,
-  // then the server stops. Nothing the candidate did outside the app is touched.
+  // remove:true also deletes the install dir and stops the server (BYOD).
   try{await fetch('/api/cleanup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({remove:true})})}catch(_){}
 }
 async function adminReset(){
@@ -643,8 +639,7 @@ function handle(msg){
     case'containment_leak':S.containmentLeak=msg.info;if(curView()==='admin'||S.status==='event_complete')render();break;
   }
 }
-// Notice shown on reset / event-complete when the candidate saved work outside the
-// container. Only managed (admin) resets populate this.
+// Reset/event-complete notice when the candidate saved work outside the container.
 function containmentLeakNote(){
   const o=S.containmentLeak; if(!o) return '';
   if(o.skipped) return '<div class="qc al" style="margin-top:14px">Containment-leak scrub skipped — no baseline snapshot to diff against. Verify the work dirs manually.</div>';
