@@ -96,7 +96,7 @@ const MARK='<svg width="28" height="24" viewBox="0 0 28 24"><path d="M6 4H3.5v16
 
 let S={status:"initializing",mode:"candidate",adminAvailable:false,adminMode:false,appearance:{theme:"system",accent:"cerulean",font:"sans"},
   steps:[],config:{},ides:[],enabledEditors:[],terminalEnabled:true,question:null,questionHtml:null,questionError:null,questionLoading:false,
-  questionVisible:true,questionPdf:null,timer:null,eventComplete:null,validationLocked:false,error:null,
+  questionVisible:true,questionPdf:null,timer:null,eventComplete:null,validationLocked:false,containmentLeak:null,error:null,
   fixes:{trouble:[],manual:[],emergency:null}};
 const ui={view:'auto',tab:'settings',unlocked:false,localComplete:false,help:null,logView:false};
 let adminToken=null, sessionTheme=null, adminCfg=null, pendingAfterUnlock=null;
@@ -229,6 +229,7 @@ function scrEventComplete(){
   const e=S.eventComplete||{};
   let h='<div class="center"><div class="check">✓</div><h1>Interview event <span class="it">complete</span>.</h1>'
     +'<p class="lede" style="text-align:center;margin:18px auto 0">'+esc(e.message||'This machine is clean.')+'</p>';
+  if(S.containmentLeak){const note=containmentLeakNote();if(note)h+='<div style="max-width:480px;margin:0 auto;text-align:left">'+note+'</div>'}
   if(e.uninstall) h+='<div class="qc" style="margin:22px auto 0;text-align:left;max-width:440px">'+esc(e.uninstall)+'</div>';
   if(e.canShutdown) h+='<div class="actions" style="justify-content:center;border-top:none"><button class="alink" data-go="newevent">Start a new event →</button><button class="alink d" data-go="shutdown">Shut down machine →</button></div>';
   return h+'</div>';
@@ -290,13 +291,14 @@ function scrReset(){
   const st=S.status;
   if(st==='resetting'||st==='setup'||st==='ending'){
     return '<div class="lbl"><span>Reset — preparing for next candidate</span><span class="ln"></span><span class="ct">'+prog.pct+'%</span></div>'
-      +progressBlock('Scrubbing host','')+stepsBlock();
+      +progressBlock('Scrubbing host','')+containmentLeakNote()+stepsBlock();
   }
   if(st==='event_complete') return scrEventComplete();
   // ready / clean
   return '<div class="lbl"><span>Reset complete</span><span class="ln"></span><span class="ct">verified clean</span></div>'
     +'<h1>The workstation is <span class="it">clean</span>.</h1>'
     +'<p class="lede">Verified against the pre-install snapshot.</p>'
+    +containmentLeakNote()
     +'<div class="sec">'+rw('','<span class="hl">Prepare for next candidate</span><div class="sub">Scrub the host and relaunch into a ready state with a new question.</div>','','','Relaunch →','reset')
     +rw('','<span class="hl">End interview event</span><div class="sub">Full teardown, prepare for storage.</div>','','','End event →','endevent')+'</div>';
 }
@@ -638,7 +640,19 @@ function handle(msg){
     case'validation':break;
     case'validation_locked':S.validationLocked=true;render();break;
     case'event_complete':S.eventComplete=msg.info;S.status='event_complete';render();break;
+    case'containment_leak':S.containmentLeak=msg.info;if(curView()==='admin'||S.status==='event_complete')render();break;
   }
+}
+// Notice shown on reset / event-complete when the candidate saved work outside the
+// container. Only managed (admin) resets populate this.
+function containmentLeakNote(){
+  const o=S.containmentLeak; if(!o) return '';
+  if(o.skipped) return '<div class="qc al" style="margin-top:14px">Containment-leak scrub skipped — no baseline snapshot to diff against. Verify the work dirs manually.</div>';
+  if(!o.removedCount && !o.stillPresent) return '<div class="qc" style="margin-top:14px">No containment leak — the candidate stayed in <code>/workspaces</code>.</div>';
+  const msg='Containment leak detected: removed '+o.removedCount+' file(s) the candidate saved outside the container'
+    +(o.stillPresent? ' — '+o.stillPresent+' could NOT be removed (manual cleanup required)':'')
+    +'. Only files added since the pre-session snapshot were removed; pre-existing files were left intact.';
+  return '<div class="qc'+(o.stillPresent?' al':'')+'" style="margin-top:14px">'+esc(msg)+'</div>';
 }
 // Light DOM patches that avoid a full re-render on high-frequency messages.
 function updateProgressDom(){

@@ -69,6 +69,17 @@ Two operator actions, both gated behind OS-level admin auth (macOS/Linux `sudo`/
 
 ShellPort detects its machine type. On a candidate's own (BYOD) machine it only ever removes its own footprint — never the aggressive host scrub reserved for dedicated DO stations.
 
+**Containment leak (managed stations only):** candidate work belongs in the container's `/workspaces` volume, which the teardown destroys. If a candidate saves to the host instead (Desktop, Documents, Downloads), the Recycle/End Event scrub diffs those folders against the pre-session snapshot and removes **only the files added during the session** — pre-existing station files are left untouched. The reset screen flags how many leaked files were found/removed, and the run writes `.last_scrub.json` (baseline, removed, and any that couldn't be removed). Verify it with:
+
+```bash
+# macOS / Linux
+node ~/shellport/admin/validate-containment-leak.js
+# Windows
+node $env:USERPROFILE\shellport\admin\validate-containment-leak.js
+```
+
+The validator confirms every removed file is gone, every pre-existing file survived, and no candidate-added file remains — exiting non-zero if anything is off. This runs only on managed DO stations (never BYOD), and never touches files outside the candidate's own work folders.
+
 ---
 
 ## Security

@@ -99,6 +99,7 @@ let state = {
   terminalEnabled: true,
   validationLocked: false,
   eventComplete: null,
+  containmentLeak: null,
   error: null,
 };
 
@@ -327,6 +328,29 @@ function detectIDEs() {
   state.ides = ides;
 }
 
+// Common host locations a candidate might save work to OUTSIDE the container.
+// Work here is NOT in the named volume, so the volume teardown can't remove it.
+const WORK_DIRS = ["Desktop", "Documents", "Downloads"].map((d) =>
+  path.join(process.env.HOME || process.env.USERPROFILE || "", d));
+
+// Recursively list every file (absolute paths) under the work dirs. Pure Node so
+// it behaves identically on every host, never shells out, and never follows
+// symlinks (so it can't escape the work dirs).
+function listWorkFiles() {
+  const out = [];
+  const walk = (dir) => {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) walk(full);
+      else if (e.isFile()) out.push(full);
+    }
+  };
+  for (const d of WORK_DIRS) walk(d);
+  return out;
+}
+
 async function captureSnapshot() {
   addStep("snapshot", "Capturing pre-install state", "running");
   const snapshot = { ts: new Date().toISOString(), files: {}, credentials: {} };
@@ -342,9 +366,55 @@ async function captureSnapshot() {
       snapshot.credentials.keychainFingerprint = keychainFingerprint();
     }
   } catch (_) {}
+  // Baseline inventory of the host work dirs, so a later reset can remove ONLY the
+  // files the candidate adds — never pre-existing station files. `captured` lets the
+  // scrub tell "genuinely empty" from "never captured" and refuse to delete blind.
+  snapshot.work = { captured: true, dirs: WORK_DIRS, baseline: listWorkFiles() };
   state.snapshot = snapshot;
   fs.writeFileSync(path.join(ROOT, ".session_snapshot.json"), JSON.stringify(snapshot, null, 2));
   addStep("snapshot", "Pre-install state captured", "done");
+}
+
+// Remove candidate work saved OUTSIDE the container, deleting ONLY files added
+// since the pre-session snapshot — pre-existing station files are preserved.
+// Managed (aggressive) reset only; writes .last_scrub.json for validation.
+function scrubContainmentLeak() {
+  const snap = state.snapshot;
+  if (!snap || !snap.work || !snap.work.captured || !Array.isArray(snap.work.baseline)) {
+    addStep("containment-leak", "Containment-leak scrub skipped — no baseline snapshot to diff against", "warning");
+    state.containmentLeak = { skipped: true, removedCount: 0, dirs: WORK_DIRS };
+    broadcast({ type: "containment_leak", info: state.containmentLeak });
+    return state.containmentLeak;
+  }
+  const baseline = new Set(snap.work.baseline);
+  const added = listWorkFiles().filter((f) => !baseline.has(f));
+  const removed = [], failed = [];
+  for (const f of added) {
+    try { fs.rmSync(f, { force: true }); removed.push(f); }
+    catch (e) { failed.push({ file: f, error: e.message }); }
+  }
+  // Files still present that were added by the candidate = anything we couldn't delete.
+  const stillAdded = listWorkFiles().filter((f) => !baseline.has(f));
+  const report = {
+    ts: new Date().toISOString(), dirs: WORK_DIRS,
+    baselineFrom: snap.ts, baselineCount: snap.work.baseline.length,
+    baseline: snap.work.baseline,   // preserved files — validation confirms these survive
+    removed, failed, stillPresent: stillAdded,
+  };
+  try { fs.writeFileSync(path.join(ROOT, ".last_scrub.json"), JSON.stringify(report, null, 2)); } catch (_) {}
+  state.containmentLeak = { removedCount: removed.length, removed: removed.slice(0, 50),
+    failedCount: failed.length, stillPresent: stillAdded.length, dirs: WORK_DIRS, ts: report.ts };
+  if (removed.length || stillAdded.length) {
+    addStep("containment-leak",
+      `Containment leak: removed ${removed.length} file(s) saved outside /workspaces${stillAdded.length ? ` — ${stillAdded.length} could NOT be removed` : ""}`,
+      stillAdded.length ? "warning" : "done");
+    removed.slice(0, 25).forEach((f) => broadcast({ type: "log", line: `[containment-leak] removed ${f}` }));
+    stillAdded.forEach((f) => broadcast({ type: "log", line: `[containment-leak] STILL PRESENT: ${f}` }));
+  } else {
+    addStep("containment-leak", "Containment leak: none found (candidate stayed in /workspaces)", "done");
+  }
+  broadcast({ type: "containment_leak", info: state.containmentLeak });
+  return report;
 }
 
 // Strip Google's export-HTML chrome down to a clean fragment we can render inline.
@@ -1236,6 +1306,7 @@ function resetSessionState(status) {
   state.cleanupIssues = null;
   state.telemetry = null;
   state.eventComplete = null;
+  state.containmentLeak = null;
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   if (workspaceWatch) { clearInterval(workspaceWatch); workspaceWatch = null; }
   broadcast({ type: "status", status });
@@ -1436,11 +1507,20 @@ async function hostScrub(aggressive = true) {
   }
   try { fs.rmSync(path.join(ROOT, ".timer"), { recursive: true, force: true }); } catch (_) {}
   addStep("phase6", "Phase 6: Rebuild — complete", "done");
+  setTarget(78, "setup");
+
+  // ── Phase 6.5: Containment leak — remove host files the candidate added ──
+  // since the pre-session snapshot (never pre-existing station files). Managed only
+  // (this whole branch is aggressive=ADMIN_MODE). Uses the in-memory snapshot, so it
+  // must run before the next setup's captureSnapshot overwrites it.
+  addStep("containment-leak", "Containment leak — removing files added since the snapshot", "running");
   setTarget(80, "setup");
+  scrubContainmentLeak();
+  setTarget(82, "setup");
 
   // ── Phase 7: Verify ──
   addStep("phase7", "Phase 7: Verify — checking for residue", "running");
-  setTarget(82, "setup");
+  setTarget(83, "setup");
   let verifyFails = 0;
   const verifyDirs = IS_WIN ? [
     path.join(home, "AppData/Local/Google/Chrome"),
@@ -1461,6 +1541,10 @@ async function hostScrub(aggressive = true) {
   if (dockerContainers.trim()) { verifyFails++; broadcast({ type: "log", line: "[verify] Docker containers still exist" }); }
   const dockerVolumes = await run("docker volume ls -q").catch(() => "");
   if (dockerVolumes.trim()) { verifyFails++; broadcast({ type: "log", line: "[verify] Docker volumes still exist" }); }
+  if (state.containmentLeak && state.containmentLeak.stillPresent) {
+    verifyFails += state.containmentLeak.stillPresent;
+    broadcast({ type: "log", line: `[verify] ${state.containmentLeak.stillPresent} candidate file(s) saved outside the container could NOT be removed` });
+  }
 
   if (verifyFails === 0) {
     addStep("phase7", "Phase 7: Verify — passed. Zero residue.", "done");
