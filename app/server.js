@@ -47,6 +47,9 @@ function httpRequest(url, opts = {}) {
 const PORT = process.env.PORT || 3000;
 const ROOT = path.resolve(__dirname, "..");
 const IS_WIN = process.platform === "win32";
+// Keep buildx state in a ShellPort-owned dir so the build never trips over a
+// root-owned ~/.docker/buildx left by a prior elevated docker/install run.
+process.env.BUILDX_CONFIG = process.env.BUILDX_CONFIG || path.join(ROOT, ".buildx");
 // "admin" dir present = managed DO station (aggressive scrub + admin panel);
 // absent = candidate BYOD (only ShellPort's own footprint is removed).
 const ADMIN_MODE = fs.existsSync(path.join(ROOT, "admin"));
@@ -1158,6 +1161,7 @@ function buildFixes() {
     { id: "t-port", label: "Port 3000 already in use", cause: "EADDRINUSE :3000", run: true, cmd: "lsof -ti:3000 | xargs kill -9" },
     { id: "t-ext", label: "IDE won't enter the container", cause: "no Dev Container badge in the editor", run: true, cmd: "code --install-extension ms-vscode-remote.remote-containers" },
     { id: "t-perm", label: "Permission denied in /workspaces", cause: "cannot write files in the editor", run: true, cmd: cd + "docker compose exec interview-env sudo chown -R vscode:vscode /workspaces" },
+    { id: "t-buildx", label: "Build: .docker permission denied", cause: "open ~/.docker/buildx/current: permission denied", run: true, cmd: "sudo chown -R \"$(whoami)\" ~/.docker" },
     { id: "t-build", label: "Build hangs or fails on a layer", cause: "stuck pulling or building", run: true, cmd: cd + "docker compose build --no-cache" },
   ];
   const manual = [
