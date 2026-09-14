@@ -1,4 +1,4 @@
-# admin-install.ps1 - ShellPort Admin Installer (Windows)
+# admin/windows/install.ps1 - ShellPort Admin Installer (Windows)
 # For company-owned DO interview stations. Downloads the admin release package,
 # which includes the admin/ overlay; that overlay is what marks the machine as a
 # managed DO station (ADMIN_MODE), enabling Recycle / End Event and the host scrub.

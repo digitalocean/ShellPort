@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# admin-done.sh - ShellPort Event Teardown (macOS / Linux)
+# admin/macos/done.sh - ShellPort Event Teardown (macOS / Linux)
 # End-of-event cleanup for DO stations. Purges everything including
 # Cursor and Claude accounts, then removes ShellPort itself.
 

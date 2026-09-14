@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# admin-install.sh - ShellPort Admin Installer (macOS / Linux)
+# admin/macos/install.sh - ShellPort Admin Installer (macOS / Linux)
 # For company-owned DO interview stations. Downloads the admin release package,
 # which includes the admin/ overlay; that overlay is what marks the machine as a
 # managed DO station (ADMIN_MODE), enabling Recycle / End Event and the host scrub.
@@ -95,7 +95,8 @@ fi
 } >> "${ENV_FILE}"
 
 chmod 600 "${ENV_FILE}"
-chmod +x "${INSTALL_DIR}/done.sh" "${INSTALL_DIR}/reset.sh" "${INSTALL_DIR}/admin-done.sh" 2>/dev/null || true
+chmod +x "${INSTALL_DIR}/done.sh" 2>/dev/null || true
+chmod +x "${INSTALL_DIR}/admin/macos/install.sh" "${INSTALL_DIR}/admin/macos/done.sh" "${INSTALL_DIR}/admin/macos/reset.sh" 2>/dev/null || true
 
 cd "${INSTALL_DIR}/app"
 

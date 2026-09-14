@@ -41,7 +41,7 @@ jobs:
           zip -r "${GITHUB_WORKSPACE}/shellport-${VERSION}-admin.zip" .
 
           cd "${GITHUB_WORKSPACE}"
-          ls -la shellport-*.tar.gz shellport-*.zip install.sh Install.ps1 admin-install.sh admin-install.ps1
+          ls -la shellport-*.tar.gz shellport-*.zip install.sh Install.ps1 admin/macos/install.sh admin/windows/install.ps1
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -52,5 +52,5 @@ jobs:
             shellport-*.zip
             install.sh
             Install.ps1
-            admin-install.sh
-            admin-install.ps1
+            admin/macos/install.sh
+            admin/windows/install.ps1

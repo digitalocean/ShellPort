@@ -122,15 +122,19 @@ These settings, plus appearance (theme/accent/font), are also editable live in t
 │   ├── devcontainer.json    # Container definition, tools, isolation
 │   └── Dockerfile           # System packages (always latest)
 ├── docker-compose.yml
-├── install.sh / Install.ps1               # Candidate / universal installers
-├── admin-install.sh / admin-install.ps1   # Managed DO station installers
-├── done.sh / Done.ps1                     # Cleanup
-├── .env.defaults            # Baked defaults copied into .env at install
-├── .env.example             # Documented reference for all options
+├── install.sh / Install.ps1   # Candidate / BYOD installers
+├── done.sh / Done.ps1         # Candidate / BYOD cleanup
+├── .env.defaults              # Baked defaults copied into .env at install
+├── .env.example               # Documented reference for all options
 ├── .github/workflows/release.yml
-├── admin/                   # Optional MDM overlay (host sanitization)
-│   ├── macos/reset.sh
-│   └── windows/Reset.ps1
+├── admin/                     # Managed DO station scripts
+│   ├── macos/
+│   │   ├── install.sh         # Station setup
+│   │   ├── done.sh            # Event teardown (purge all + remove ShellPort)
+│   │   └── reset.sh           # Between candidates (scrub creds, keep ShellPort)
+│   └── windows/
+│       ├── install.ps1        # Station setup
+│       └── Reset.ps1          # Full host teardown
 └── README.md
 ```
 
@@ -167,7 +171,7 @@ git tag -a v1.0.0 -m "Release" && git push origin v1.0.0
 | `shellport-VERSION.tar.gz` / `.zip` | Everyone | Container + app + install + cleanup |
 | `shellport-VERSION-admin.tar.gz` / `.zip` | IT only | Above + `admin/` overlay |
 | `install.sh` / `Install.ps1` | Standalone | Candidate entry points |
-| `admin-install.sh` / `admin-install.ps1` | Standalone | Managed DO station entry points |
+| `admin/macos/install.sh` / `admin/windows/install.ps1` | Standalone | Managed DO station entry points |
 
 ---
 

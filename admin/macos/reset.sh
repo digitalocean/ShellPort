@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# reset.sh - ShellPort Full Host Teardown (macOS / Jamf)
+# reset.sh - ShellPort Station Reset (macOS / Jamf)
+# Between-candidate reset for DO stations. Scrubs the host but preserves
+# Cursor and Claude login state so they auto-reconnect on next launch.
+# For full teardown (end of event), use admin/macos/done.sh instead.
 # Run as root. Supports --batch for non-interactive execution from the dashboard.
 #
 # Usage:
@@ -24,7 +27,7 @@ for arg in "$@"; do
     case "$arg" in
         --batch) BATCH=true ;;
         --log) :;; # next arg is the path
-        *) 
+        *)
             if [[ -n "$LOG_FILE_NEXT" ]]; then
                 LOG_FILE="$arg"
                 LOG_FILE_NEXT=""
@@ -128,19 +131,24 @@ info "Phase 4: CLI — scrubbing credentials and agent state"
 as_user "gh auth logout --hostname github.com" || true
 as_user "doctl auth remove --context default" || true
 
+# Credential dirs (Cursor and Claude auth kept — DO provides accounts)
 for dir in \
     "${GUI_HOME}/.config/gh" "${GUI_HOME}/.config/doctl" \
     "${GUI_HOME}/.ssh" "${GUI_HOME}/.gitconfig" "${GUI_HOME}/.git-credentials" "${GUI_HOME}/.netrc" \
-    "${GUI_HOME}/.claude" "${GUI_HOME}/.config/claude" "${GUI_HOME}/.config/Claude" \
-    "${GUI_HOME}/.anthropic" "${GUI_HOME}/.config/anthropic" \
-    "${GUI_HOME}/Library/Application Support/claude" "${GUI_HOME}/Library/Application Support/Claude" \
-    "${GUI_HOME}/Library/Caches/claude" "${GUI_HOME}/Library/Caches/Claude" \
     "${GUI_HOME}/.aider" "${GUI_HOME}/.config/aider" \
     "${GUI_HOME}/.codeium" "${GUI_HOME}/.config/codeium" \
     "${GUI_HOME}/.continue" "${GUI_HOME}/.config/continue" \
     "${GUI_HOME}/.copilot" "${GUI_HOME}/.config/copilot"; do
     [[ -e "$dir" ]] && rm -rf "$dir" 2>/dev/null || true
 done
+
+# Claude Code: wipe session data, keep auth
+for subdir in projects todos statsig; do
+    rm -rf "${GUI_HOME}/.claude/${subdir}" 2>/dev/null || true
+done
+
+# Claude/Anthropic caches only (auth lives in Application Support + keychain)
+rm -rf "${GUI_HOME}/Library/Caches/claude" "${GUI_HOME}/Library/Caches/Claude" 2>/dev/null || true
 
 # Scrub tokens from .env
 if [[ -f "$ENV_FILE" ]]; then
@@ -159,15 +167,15 @@ _purge() {
     su - "${GUI_USER}" -c "security delete-internet-password -l '${svc}' 2>/dev/null; true" 2>/dev/null
 }
 
+# Cursor and Claude keychain entries kept — DO provides accounts
 for svc in \
     "gh:github.com" "git:https://github.com" "github.com" "api.github.com" \
-    "vscodevscode.github-authentication" "cursorcursor.github-authentication" \
-    "cursor.github-authentication" "vscode.github-authentication" \
+    "vscodevscode.github-authentication" "vscode.github-authentication" \
     "windsurfwindsurf.github-authentication" "windsurf.github-authentication" \
     "Chrome Safe Storage" "Chromium Safe Storage" "Microsoft Edge Safe Storage" \
     "Brave Safe Storage" "Arc Safe Storage" "Firefox Safe Storage" "Safari Safe Storage" \
-    "docker-credential-osxkeychain" "Docker Credentials" "Claude Safe Storage" \
-    "Windsurf Safe Storage" "claude" "anthropic" "doctl"; do
+    "docker-credential-osxkeychain" "Docker Credentials" \
+    "Windsurf Safe Storage" "doctl"; do
     _purge "$svc"
 done
 info "Phase 5: Keychain — complete"
@@ -175,19 +183,27 @@ info "Phase 5: Keychain — complete"
 # ========== PHASE 6: Deep clean IDEs and browsers ==========
 info "Phase 6: Deep clean — wiping IDE and browser data"
 
+# Cursor: wipe session/workspace data, keep auth in Application Support root
+for subdir in workspaceStorage History Backups logs CachedData CachedExtensionVSIXs \
+    CachedExtensions GPUCache DawnCache "Service Worker" "Code Cache" blob_storage Crashpad; do
+    rm -rf "${GUI_HOME}/Library/Application Support/Cursor/${subdir}" 2>/dev/null || true
+    rm -rf "${GUI_HOME}/Library/Application Support/Cursor/User/${subdir}" 2>/dev/null || true
+done
+rm -rf "${GUI_HOME}/Library/Caches/Cursor" 2>/dev/null || true
+rm -rf "${GUI_HOME}/Library/Saved Application State/com.todesktop.230313mzl4w4u92.savedState" 2>/dev/null || true
+
+# Claude desktop: wipe caches and saved state, keep Application Support (has auth)
+rm -rf "${GUI_HOME}/Library/Caches/Claude" 2>/dev/null || true
+rm -rf "${GUI_HOME}/Library/Saved Application State/com.anthropic.claudefordesktop.savedState" 2>/dev/null || true
+
+# Everything else: full wipe
 for target in \
     "${GUI_HOME}/Library/Application Support/Code" \
     "${GUI_HOME}/Library/Caches/com.microsoft.VSCode" \
     "${GUI_HOME}/Library/Saved Application State/com.microsoft.VSCode.savedState" \
-    "${GUI_HOME}/Library/Application Support/Cursor" \
-    "${GUI_HOME}/Library/Caches/Cursor" \
-    "${GUI_HOME}/Library/Saved Application State/com.todesktop.230313mzl4w4u92.savedState" \
     "${GUI_HOME}/Library/Application Support/Windsurf" \
     "${GUI_HOME}/Library/Caches/Windsurf" \
     "${GUI_HOME}/Library/Saved Application State/com.codeium.windsurf.savedState" \
-    "${GUI_HOME}/Library/Application Support/Claude" \
-    "${GUI_HOME}/Library/Caches/Claude" \
-    "${GUI_HOME}/Library/Saved Application State/com.anthropic.claudefordesktop.savedState" \
     "${GUI_HOME}/Library/Application Support/Google/Chrome" \
     "${GUI_HOME}/Library/Caches/com.google.Chrome" \
     "${GUI_HOME}/Library/Saved Application State/com.google.Chrome.savedState" \
@@ -236,16 +252,16 @@ info "Phase 7: Rebuild — complete"
 info "Phase 8: Verify — checking for residue"
 
 VERIFY_FAILURES=0
+# Cursor and Claude Application Support intentionally kept (auth)
 for check_dir in \
     "${GUI_HOME}/.config/gh" "${GUI_HOME}/.ssh" "${GUI_HOME}/.gitconfig" \
-    "${GUI_HOME}/.git-credentials" "${GUI_HOME}/.claude" "${GUI_HOME}/.anthropic" \
+    "${GUI_HOME}/.git-credentials" \
     "${GUI_HOME}/Library/Application Support/Google/Chrome" \
     "${GUI_HOME}/Library/Application Support/Microsoft Edge" \
     "${GUI_HOME}/Library/Application Support/Firefox" \
     "${GUI_HOME}/Library/Application Support/BraveSoftware/Brave-Browser" \
     "${GUI_HOME}/Library/Application Support/Arc" \
     "${GUI_HOME}/Library/Application Support/Code" \
-    "${GUI_HOME}/Library/Application Support/Cursor" \
     "${GUI_HOME}/Library/Application Support/Windsurf"; do
     if [[ -e "$check_dir" ]]; then
         warn "VERIFY FAIL: ${check_dir} still exists"
@@ -271,7 +287,7 @@ chown "${GUI_USER}" "${MARKER_FILE}"
 info "Marker written: ${MARKER_FILE}"
 
 # ========== Done ==========
-info "Teardown complete. ${RESET_TS} | User: ${GUI_USER}"
+info "Reset complete. ${RESET_TS} | User: ${GUI_USER}"
 
 # In batch mode, skip interactive prompts and don't rebuild (server handles that)
 if [[ "$BATCH" == "true" ]]; then
