@@ -17,7 +17,7 @@ curl -fsSL https://do.co/shellport-admin-mac | bash
 
 ```powershell
 # Windows (PowerShell)
-irm https://do.co/shellport-admin-win | iex
+powershell -c "iwr https://do.co/shellport-admin-win -OutFile $env:TEMP\sp.ps1; Unblock-File $env:TEMP\sp.ps1; powershell -nop -ep RemoteSigned -File $env:TEMP\sp.ps1"
 ```
 
 **Candidate (own machine):**
@@ -29,7 +29,7 @@ curl -fsSL https://do.co/shellport-macos | bash
 
 ```powershell
 # Windows (PowerShell)
-irm https://do.co/shellport-windows | iex
+powershell -c "iwr https://do.co/shellport-windows -OutFile $env:TEMP\sp.ps1; Unblock-File $env:TEMP\sp.ps1; powershell -nop -ep RemoteSigned -File $env:TEMP\sp.ps1"
 ```
 
 Prerequisites: Docker (running) and Node.js. Your browser opens to `http://localhost:3000` — everything runs locally, no cloud. The dashboard shows build progress, then "Start in" buttons for each detected editor (VS Code, Cursor, Windsurf, VSCodium…), the web editors **vscode.dev** and **github.dev**, and the container terminal.
@@ -39,7 +39,7 @@ Prerequisites: Docker (running) and Node.js. Your browser opens to `http://local
 The **same one-liner** is the MDM payload — no wrapper needed. ShellPort is per-user (it installs to `~/shellport`, uses the logged-in user's Docker, and opens their browser), and the installer detects when an MDM runs it as **root** (Jamf) or **SYSTEM** (Intune) and automatically re-runs in the logged-in user's session, forwarding any `SHELLPORT_*` config.
 
 - **Jamf (macOS):** paste `curl -fsSL https://do.co/shellport-admin-mac | bash` into a script and run it from a policy. Use a **login** or **Self Service** trigger so a user is present; if none is, the run exits cleanly so the next login retries. Set per-event config (questions, Slack token/channel, label) as policy parameters exported as `SHELLPORT_*`, or bake them into the release.
-- **Intune (Windows):** deploy `irm https://do.co/shellport-admin-win | iex` as a platform script. Either set **"Run this script using the logged-on credentials = Yes"** (cleanest — runs as the user directly), or leave it as SYSTEM and the installer re-launches into the user's session via a one-shot scheduled task.
+- **Intune (Windows):** deploy `powershell -c "iwr https://do.co/shellport-admin-win -OutFile $env:TEMP\sp.ps1; Unblock-File $env:TEMP\sp.ps1; powershell -nop -ep RemoteSigned -File $env:TEMP\sp.ps1"` as a platform script. Either set **"Run this script using the logged-on credentials = Yes"** (cleanest — runs as the user directly), or leave it as SYSTEM and the installer re-launches into the user's session via a one-shot scheduled task.
 
 Prerequisites still apply per user: Docker (set to start at login) and Node.js must be installed for the logged-in user, or the installer stops with a clear message.
 

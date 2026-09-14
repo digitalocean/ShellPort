@@ -1,7 +1,7 @@
 # Install.ps1 - ShellPort Installer (Windows)
 # Same script, two audiences (the shortlinks are go-links pointing here):
-#   Admin (company machine):   irm https://do.co/shellport-admin-win | iex
-#   Candidate (remote BYOD):   irm https://do.co/shellport-windows   | iex
+#   Admin (company machine):   powershell -c "iwr https://do.co/shellport-admin-win -OutFile $env:TEMP\sp.ps1; Unblock-File $env:TEMP\sp.ps1; powershell -nop -ep RemoteSigned -File $env:TEMP\sp.ps1"
+#   Candidate (remote BYOD):   powershell -c "iwr https://do.co/shellport-windows -OutFile $env:TEMP\sp.ps1; Unblock-File $env:TEMP\sp.ps1; powershell -nop -ep RemoteSigned -File $env:TEMP\sp.ps1"
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -27,9 +27,11 @@ if ([Security.Principal.WindowsIdentity]::GetCurrent().IsSystem) {
         $val = [Environment]::GetEnvironmentVariable($v)
         if ($val) { $prelude += "`$env:$v='" + ($val -replace "'","''") + "'; " }
     }
-    $inner   = "$prelude irm $SelfUrl | iex"
-    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($inner))
-    $action  = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand $encoded"
+    $bootstrapFile = Join-Path $env:TEMP "shellport_bootstrap.ps1"
+    $inner = "$prelude iwr '$SelfUrl' -OutFile '$bootstrapFile' -UseBasicParsing; Unblock-File '$bootstrapFile'; & '$bootstrapFile'"
+    Set-Content $bootstrapFile $inner -Encoding UTF8
+    Unblock-File $bootstrapFile
+    $action  = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy RemoteSigned -File `"$bootstrapFile`""
     $principal = New-ScheduledTaskPrincipal -UserId $loggedIn -LogonType Interactive -RunLevel Limited
     $settings  = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
     Register-ScheduledTask -TaskName "ShellPortInstall" -Action $action -Principal $principal -Settings $settings -Force | Out-Null

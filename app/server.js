@@ -868,7 +868,7 @@ async function validatePreInterview() {
   let credResidue = false;
   if (ADMIN_MODE) {
     const home = process.env.HOME || process.env.USERPROFILE;
-    for (const d of [".config/gh", ".config/doctl", ".claude", ".git-credentials"]) {
+    for (const d of [".config/gh", ".config/doctl", ".git-credentials"]) {
       if (fs.existsSync(path.join(home, d))) { residue.push(`leftover credentials (${d})`); credResidue = true; break; }
     }
   }

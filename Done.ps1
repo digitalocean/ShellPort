@@ -36,7 +36,7 @@ Write-Info "Removing $ScriptDir..."
 
 # Self-destruct
 Set-Location $env:USERPROFILE
-Start-Process cmd -ArgumentList "/c", "timeout /t 2 /nobreak >nul & rmdir /s /q `"$ScriptDir`"" -WindowStyle Hidden
+Start-Process cmd -ArgumentList "/c", "timeout /t 2 /nobreak >nul & rmdir /s /q `"$ScriptDir`"" -WindowStyle Minimized
 
 Write-Host ""
 Write-Info "ShellPort removed. Nothing left behind."

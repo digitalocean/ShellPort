@@ -89,6 +89,7 @@ fi
 } >> "${ENV_FILE}"
 
 chmod 600 "${ENV_FILE}"
+chmod +x "${INSTALL_DIR}/done.sh" 2>/dev/null || true
 
 cd "${INSTALL_DIR}/app"
 
