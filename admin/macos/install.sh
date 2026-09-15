@@ -47,10 +47,58 @@ echo "  ShellPort (Admin)"
 echo "  Managed DO interview station"
 echo ""
 
-# Prerequisites
-command -v docker &>/dev/null || die "Docker not found. Install OrbStack (https://orbstack.dev) or Docker Desktop first."
-docker info &>/dev/null 2>&1 || die "Docker is not running. Start Docker and try again."
-command -v node &>/dev/null || die "Node.js not found. Install from https://nodejs.org first."
+# Prerequisites — auto-install on managed stations
+if ! command -v node &>/dev/null; then
+    info "Node.js not found. Installing..."
+    if command -v brew &>/dev/null; then
+        brew install node
+    else
+        NODE_PKG="/tmp/node-latest.pkg"
+        curl -fsSL "https://nodejs.org/dist/latest/node-latest.pkg" -o "${NODE_PKG}" \
+            || die "Could not download Node.js. Install manually from https://nodejs.org"
+        sudo installer -pkg "${NODE_PKG}" -target / || die "Node.js installation failed."
+        rm -f "${NODE_PKG}"
+    fi
+    command -v node &>/dev/null || die "Node.js installation failed."
+    info "Node.js $(node --version) installed."
+fi
+
+if ! command -v docker &>/dev/null; then
+    info "Docker not found. Installing OrbStack..."
+    if command -v brew &>/dev/null; then
+        brew install orbstack
+    else
+        ORB_PKG="/tmp/OrbStack.dmg"
+        curl -fsSL "https://orbstack.dev/download/stable/latest" -o "${ORB_PKG}" \
+            || die "Could not download OrbStack. Install manually from https://orbstack.dev"
+        hdiutil attach "${ORB_PKG}" -nobrowse -quiet
+        cp -R "/Volumes/OrbStack/OrbStack.app" /Applications/ 2>/dev/null || true
+        hdiutil detach "/Volumes/OrbStack" -quiet 2>/dev/null || true
+        rm -f "${ORB_PKG}"
+    fi
+    open -a OrbStack
+    info "Waiting for OrbStack to start..."
+    for i in $(seq 1 60); do
+        docker info &>/dev/null 2>&1 && break
+        sleep 2
+    done
+    command -v docker &>/dev/null || die "OrbStack installation failed."
+    info "OrbStack installed."
+fi
+
+if ! docker info &>/dev/null 2>&1; then
+    info "Docker not running. Starting OrbStack..."
+    open -a OrbStack 2>/dev/null || orbctl start 2>/dev/null || true
+    for i in $(seq 1 30); do
+        docker info &>/dev/null 2>&1 && break
+        sleep 2
+    done
+    docker info &>/dev/null 2>&1 || die "Docker failed to start. Launch OrbStack manually."
+    info "OrbStack running."
+fi
+
+# Set OrbStack to start at login
+defaults write com.orbstack.OrbStack AutoStart -bool true 2>/dev/null || true
 
 # Clean previous install
 [[ -d "${INSTALL_DIR}" ]] && { info "Removing previous installation..."; rm -rf "${INSTALL_DIR}"; }

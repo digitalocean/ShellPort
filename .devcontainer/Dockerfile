@@ -6,6 +6,8 @@ RUN apt-get update \
         neovim \
         imagemagick \
         jq \
+        s3cmd \
+        ripgrep \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
@@ -20,6 +22,20 @@ RUN curl -fsSL \
         "https://github.com/digitalocean/doctl/releases/download/v${DOCTL_VERSION}/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz" \
         | tar -xz -C /usr/local/bin \
  && chmod +x /usr/local/bin/doctl
+
+# kubectl - latest stable
+RUN curl -fsSL "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
+        -o /usr/local/bin/kubectl \
+ && chmod +x /usr/local/bin/kubectl
+
+# terraform - pinned version, update ARG to bump
+ARG TERRAFORM_VERSION=1.9.8
+RUN curl -fsSL \
+        "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip" \
+        -o /tmp/terraform.zip \
+ && unzip -o /tmp/terraform.zip -d /usr/local/bin \
+ && rm /tmp/terraform.zip \
+ && chmod +x /usr/local/bin/terraform
 
 USER vscode
 

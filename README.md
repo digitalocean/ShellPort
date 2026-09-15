@@ -47,7 +47,7 @@ Prerequisites still apply per user: Docker (set to start at login) and Node.js m
 
 ## The Container
 
-The IDE opens inside an isolated container with the latest Go, Python, Java, Node.js, C/C++, TypeScript, GitHub Copilot, Claude Code, GitHub CLI, doctl, Homebrew, neovim, jq, and yq. All candidate work must be saved in `/workspaces`.
+The IDE opens inside an isolated container with the latest Go, Python, Java, Node.js, C/C++, TypeScript, GitHub Copilot, Claude Code, GitHub CLI, doctl, kubectl, terraform, helm, s3cmd, Homebrew, neovim, jq, yq, ripgrep, tree, and httpie. All candidate work must be saved in `/workspaces`.
 
 ---
 
