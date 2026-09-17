@@ -320,15 +320,6 @@ $dirsToRemove = @(
     "$UserHome\.gitconfig",
     "$UserHome\.git-credentials",
     "$UserHome\.netrc",
-    "$UserHome\.claude",
-    "$UserHome\.config\claude",
-    "$UserHome\.config\Claude",
-    "$UserHome\.anthropic",
-    "$UserHome\.config\anthropic",
-    "$env:APPDATA\claude",
-    "$env:APPDATA\Claude",
-    "$env:LOCALAPPDATA\claude",
-    "$env:LOCALAPPDATA\Claude",
     "$UserHome\.aider",
     "$UserHome\.config\aider",
     "$UserHome\.codeium",
@@ -340,6 +331,14 @@ $dirsToRemove = @(
 )
 foreach ($dir in $dirsToRemove) {
     if (Test-Path $dir) { Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+# Claude Code: keep only auth credentials, wipe everything else
+$claudeCodeDir = "$UserHome\.claude"
+if (Test-Path $claudeCodeDir) {
+    Get-ChildItem $claudeCodeDir -Force | Where-Object {
+        $_.Name -notin @(".credentials.json", "credentials.json", "statsig_metadata")
+    } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 if (Test-Path $EnvFile) {
@@ -355,7 +354,7 @@ $env:GH_TOKEN = ""
 Write-Info "Phase 5: Credential purge"
 Notify-Phase "Purging credential store..."
 
-$patterns = @("github", "LegacyGeneric", "MicrosoftAccount", "docker", "claude", "anthropic", "gh:", "doctl", "windsurf")
+$patterns = @("github", "LegacyGeneric", "MicrosoftAccount", "docker", "gh:", "doctl", "windsurf")
 $cmdkeyList = cmdkey /list 2>$null
 if ($cmdkeyList) {
     foreach ($line in $cmdkeyList) {
@@ -377,13 +376,9 @@ Notify-Phase "Deep cleaning IDEs and browsers..."
 
 $targetsToRemove = @(
     "$env:APPDATA\Code",
-    "$env:APPDATA\Cursor",
     "$env:APPDATA\Windsurf",
     "$env:LOCALAPPDATA\Microsoft\VSCode",
-    "$env:LOCALAPPDATA\Programs\cursor\resources",
     "$env:LOCALAPPDATA\Programs\windsurf\resources",
-    "$env:APPDATA\Claude",
-    "$env:LOCALAPPDATA\Claude",
     "$env:LOCALAPPDATA\Google\Chrome\User Data",
     "$env:LOCALAPPDATA\Microsoft\Edge\User Data",
     "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\User Data",
@@ -393,6 +388,19 @@ $targetsToRemove = @(
 )
 foreach ($target in $targetsToRemove) {
     if (Test-Path $target) { Remove-Item $target -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+# Cursor: keep only Local State (credential store reference), wipe everything else
+$cursorBase = "$env:APPDATA\Cursor"
+if (Test-Path $cursorBase) {
+    Get-ChildItem $cursorBase -Force | Where-Object { $_.Name -ne "Local State" } |
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+# Claude desktop: keep AppData dirs (login state), wipe only caches
+foreach ($p in @("$env:LOCALAPPDATA\Claude\Cache", "$env:LOCALAPPDATA\Claude\Code Cache",
+                 "$env:LOCALAPPDATA\Claude\GPUCache", "$env:LOCALAPPDATA\Claude\DawnCache")) {
+    if (Test-Path $p) { Remove-Item $p -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
 # Phase 7: Rebuild
@@ -431,15 +439,12 @@ $checkDirs = @(
     "$UserHome\.ssh",
     "$UserHome\.gitconfig",
     "$UserHome\.git-credentials",
-    "$UserHome\.claude",
-    "$UserHome\.anthropic",
     "$env:LOCALAPPDATA\Google\Chrome\User Data",
     "$env:LOCALAPPDATA\Microsoft\Edge\User Data",
     "$env:APPDATA\Mozilla\Firefox\Profiles",
     "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\User Data",
     "$env:LOCALAPPDATA\Arc\User Data",
     "$env:APPDATA\Code",
-    "$env:APPDATA\Cursor",
     "$env:APPDATA\Windsurf"
 )
 foreach ($check in $checkDirs) {

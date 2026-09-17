@@ -142,10 +142,12 @@ for dir in \
     [[ -e "$dir" ]] && rm -rf "$dir" 2>/dev/null || true
 done
 
-# Claude Code: wipe session data, keep auth
-for subdir in projects todos statsig; do
-    rm -rf "${GUI_HOME}/.claude/${subdir}" 2>/dev/null || true
-done
+# Claude Code: keep auth credentials, wipe everything else
+if [[ -d "${GUI_HOME}/.claude" ]]; then
+    find "${GUI_HOME}/.claude" -mindepth 1 -maxdepth 1 \
+        ! -name ".credentials.json" ! -name "credentials.json" ! -name "statsig_metadata" \
+        -exec rm -rf {} + 2>/dev/null || true
+fi
 
 # Claude/Anthropic caches only (auth lives in Application Support + keychain)
 rm -rf "${GUI_HOME}/Library/Caches/claude" "${GUI_HOME}/Library/Caches/Claude" 2>/dev/null || true
@@ -183,12 +185,13 @@ info "Phase 5: Keychain — complete"
 # ========== PHASE 6: Deep clean IDEs and browsers ==========
 info "Phase 6: Deep clean — wiping IDE and browser data"
 
-# Cursor: wipe session/workspace data, keep auth in Application Support root
-for subdir in workspaceStorage History Backups logs CachedData CachedExtensionVSIXs \
-    CachedExtensions GPUCache DawnCache "Service Worker" "Code Cache" blob_storage Crashpad; do
-    rm -rf "${GUI_HOME}/Library/Application Support/Cursor/${subdir}" 2>/dev/null || true
-    rm -rf "${GUI_HOME}/Library/Application Support/Cursor/User/${subdir}" 2>/dev/null || true
-done
+# Cursor: keep only Local State (keychain reference), wipe everything else
+CURSOR_BASE="${GUI_HOME}/Library/Application Support/Cursor"
+if [[ -d "$CURSOR_BASE" ]]; then
+    find "$CURSOR_BASE" -mindepth 1 -maxdepth 1 \
+        ! -name "Local State" \
+        -exec rm -rf {} + 2>/dev/null || true
+fi
 rm -rf "${GUI_HOME}/Library/Caches/Cursor" 2>/dev/null || true
 rm -rf "${GUI_HOME}/Library/Saved Application State/com.todesktop.230313mzl4w4u92.savedState" 2>/dev/null || true
 

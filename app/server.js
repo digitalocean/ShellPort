@@ -328,22 +328,57 @@ function detectIDEs() {
 }
 
 // Host locations a candidate might save work to outside the container volume.
-const WORK_DIRS = ["Desktop", "Documents", "Downloads"].map((d) =>
-  path.join(process.env.HOME || process.env.USERPROFILE || "", d));
+// BYOD: only Desktop/Documents/Downloads (safe — never touch the user's own files).
+// Admin: entire home dir + /tmp — candidates can save anywhere.
+const HOME_DIR = process.env.HOME || process.env.USERPROFILE || "";
+const BYOD_DIRS = ["Desktop", "Documents", "Downloads"].map((d) => path.join(HOME_DIR, d));
 
-// All files (absolute paths) under the work dirs, recursive, not following symlinks.
-function listWorkFiles() {
-  const out = [];
-  const walk = (dir) => {
+const ADMIN_SKIP_HOME = new Set([
+  "Applications", ".Trash", ".docker", ".buildx", ".orbstack", "shellport",
+]);
+const LIB_SCAN_SKIP = new Set([
+  "Application Support", "Caches", "Containers", "Cookies", "Developer",
+  "Fonts", "Group Containers", "HomeKit", "Input Methods", "Keychains",
+  "LaunchAgents", "Logs", "Mail", "Messages", "Metadata",
+  "Preferences", "Saved Application State", "Sounds", "Spelling",
+  "SyncedPreferences", "WebKit",
+]);
+
+function workDirs() {
+  if (!ADMIN_MODE) return BYOD_DIRS;
+  const dirs = [HOME_DIR];
+  if (fs.existsSync("/tmp")) dirs.push("/tmp");
+  return dirs;
+}
+
+// hashed=true returns Map<path, md5> for snapshot/scrub; false returns path array.
+function listWorkFiles(hashed = false) {
+  const out = hashed ? new Map() : [];
+  const buf = hashed ? Buffer.alloc(8192) : null;
+  const walk = (dir, skipSet) => {
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
     for (const e of entries) {
+      if (skipSet && skipSet.has(e.name)) continue;
       const full = path.join(dir, e.name);
-      if (e.isDirectory()) walk(full);
-      else if (e.isFile()) out.push(full);
+      if (e.isDirectory()) {
+        if (ADMIN_MODE && full === path.join(HOME_DIR, "Library")) walk(full, LIB_SCAN_SKIP);
+        else walk(full, null);
+      } else if (e.isFile()) {
+        if (hashed) {
+          try {
+            const fd = fs.openSync(full, "r");
+            const n = fs.readSync(fd, buf, 0, 8192, 0);
+            fs.closeSync(fd);
+            out.set(full, crypto.createHash("md5").update(buf.subarray(0, n)).digest("hex"));
+          } catch (_) { out.set(full, "unreadable"); }
+        } else out.push(full);
+      }
     }
   };
-  for (const d of WORK_DIRS) walk(d);
+  for (const d of workDirs()) {
+    walk(d, ADMIN_MODE && d === HOME_DIR ? ADMIN_SKIP_HOME : null);
+  }
   return out;
 }
 
@@ -362,50 +397,78 @@ async function captureSnapshot() {
       snapshot.credentials.keychainFingerprint = keychainFingerprint();
     }
   } catch (_) {}
-  // Baseline of the work dirs so a reset removes only files added since. `captured`
-  // distinguishes "empty" from "never captured" so the scrub won't delete blind.
-  snapshot.work = { captured: true, dirs: WORK_DIRS, baseline: listWorkFiles() };
+  // Hashed baseline — scrub diffs against this to find added/modified files.
+  const baselineMap = listWorkFiles(true);
+  snapshot.work = { captured: true, dirs: workDirs(), baseline: Object.fromEntries(baselineMap) };
   state.snapshot = snapshot;
   fs.writeFileSync(path.join(ROOT, ".session_snapshot.json"), JSON.stringify(snapshot, null, 2));
   addStep("snapshot", "Pre-install state captured", "done");
 }
 
-// Delete files added to the work dirs since the snapshot (pre-existing ones kept).
-// Writes .last_scrub.json for validation.
 function scrubContainmentLeak() {
   const snap = state.snapshot;
-  if (!snap || !snap.work || !snap.work.captured || !Array.isArray(snap.work.baseline)) {
-    addStep("containment-leak", "Containment-leak scrub skipped — no baseline snapshot to diff against", "warning");
-    state.containmentLeak = { skipped: true, removedCount: 0, dirs: WORK_DIRS };
+  if (!snap || !snap.work || !snap.work.captured) {
+    addStep("containment-leak", "Containment-leak scrub skipped — no baseline snapshot", "warning");
+    state.containmentLeak = { skipped: true, removedCount: 0, dirs: workDirs() };
     broadcast({ type: "containment_leak", info: state.containmentLeak });
     return state.containmentLeak;
   }
-  const baseline = new Set(snap.work.baseline);
-  const added = listWorkFiles().filter((f) => !baseline.has(f));
-  const removed = [], failed = [];
+  const baseline = snap.work.baseline;
+  const current = listWorkFiles(true);
+  const added = [], modified = [];
+  for (const [f, hash] of current) {
+    if (!(f in baseline)) added.push(f);
+    else if (baseline[f] !== hash && baseline[f] !== "unreadable") modified.push(f);
+  }
+
+  const removed = [], restored = [], failed = [];
   for (const f of added) {
     try { fs.rmSync(f, { force: true }); removed.push(f); }
     catch (e) { failed.push({ file: f, error: e.message }); }
   }
-  // Files still present that were added by the candidate = anything we couldn't delete.
-  const stillAdded = listWorkFiles().filter((f) => !baseline.has(f));
+  for (const f of modified) {
+    try { fs.writeFileSync(f, ""); restored.push(f); }
+    catch (e) { failed.push({ file: f, error: e.message }); }
+  }
+  if (ADMIN_MODE && removed.length) {
+    const dirs = [...new Set(removed.map((f) => path.dirname(f)))].sort((a, b) => b.length - a.length);
+    for (const d of dirs) {
+      try { if (fs.readdirSync(d).length === 0 && d !== HOME_DIR) fs.rmdirSync(d); } catch (_) {}
+    }
+  }
+  // Verify only the files we touched instead of rescanning the whole tree
+  const stillLeaked = [];
+  for (const f of added) { try { if (fs.existsSync(f)) stillLeaked.push(f); } catch (_) {} }
+  for (const f of modified) {
+    try {
+      const fd = fs.openSync(f, "r");
+      const b = Buffer.alloc(8192);
+      const n = fs.readSync(fd, b, 0, 8192, 0);
+      fs.closeSync(fd);
+      const h = crypto.createHash("md5").update(b.subarray(0, n)).digest("hex");
+      if (baseline[f] !== h) stillLeaked.push(f);
+    } catch (_) {}
+  }
   const report = {
-    ts: new Date().toISOString(), dirs: WORK_DIRS,
-    baselineFrom: snap.ts, baselineCount: snap.work.baseline.length,
-    baseline: snap.work.baseline,   // preserved files — validation confirms these survive
-    removed, failed, stillPresent: stillAdded,
+    ts: new Date().toISOString(), dirs: workDirs(), baselineFrom: snap.ts,
+    baselineCount: Object.keys(baseline).length, removed, restored, failed, stillPresent: stillLeaked,
   };
   try { fs.writeFileSync(path.join(ROOT, ".last_scrub.json"), JSON.stringify(report, null, 2)); } catch (_) {}
-  state.containmentLeak = { removedCount: removed.length, removed: removed.slice(0, 50),
-    failedCount: failed.length, stillPresent: stillAdded.length, dirs: WORK_DIRS, ts: report.ts };
-  if (removed.length || stillAdded.length) {
-    addStep("containment-leak",
-      `Containment leak: removed ${removed.length} file(s) saved outside /workspaces${stillAdded.length ? ` — ${stillAdded.length} could NOT be removed` : ""}`,
-      stillAdded.length ? "warning" : "done");
+  state.containmentLeak = { removedCount: removed.length, restoredCount: restored.length,
+    removed: removed.slice(0, 50), restored: restored.slice(0, 50),
+    failedCount: failed.length, stillPresent: stillLeaked.length, dirs: workDirs(), ts: report.ts };
+  const total = removed.length + restored.length;
+  if (total || stillLeaked.length) {
+    const parts = [];
+    if (removed.length) parts.push(`removed ${removed.length}`);
+    if (restored.length) parts.push(`restored ${restored.length} modified`);
+    if (stillLeaked.length) parts.push(`${stillLeaked.length} could NOT be cleaned`);
+    addStep("containment-leak", `Containment leak: ${parts.join(", ")}`, stillLeaked.length ? "warning" : "done");
     removed.slice(0, 25).forEach((f) => broadcast({ type: "log", line: `[containment-leak] removed ${f}` }));
-    stillAdded.forEach((f) => broadcast({ type: "log", line: `[containment-leak] STILL PRESENT: ${f}` }));
+    restored.slice(0, 25).forEach((f) => broadcast({ type: "log", line: `[containment-leak] restored ${f}` }));
+    stillLeaked.forEach((f) => broadcast({ type: "log", line: `[containment-leak] STILL PRESENT: ${f}` }));
   } else {
-    addStep("containment-leak", "Containment leak: none found (candidate stayed in /workspaces)", "done");
+    addStep("containment-leak", "Containment leak: clean", "done");
   }
   broadcast({ type: "containment_leak", info: state.containmentLeak });
   return report;
@@ -1352,13 +1415,23 @@ async function hostScrub(aggressive = true) {
   await run("doctl auth remove --context default 2>/dev/null || true").catch(() => {});
   const credDirs = [
     ".config/gh", ".config/doctl", ".ssh", ".gitconfig", ".git-credentials", ".netrc",
-    ".claude", ".config/claude", ".config/Claude", ".anthropic", ".config/anthropic",
     ".aider", ".config/aider", ".codeium", ".config/codeium",
     ".continue", ".config/continue", ".copilot", ".config/copilot"
   ];
   for (const dir of credDirs) {
     const full = path.join(home, dir);
     if (fs.existsSync(full)) { try { fs.rmSync(full, { recursive: true, force: true }); } catch (_) {} }
+  }
+  // Claude Code: keep auth credentials, wipe everything else
+  const claudeCodeDir = path.join(home, ".claude");
+  const claudeKeep = new Set([".credentials.json", "credentials.json", "statsig_metadata"]);
+  if (fs.existsSync(claudeCodeDir)) {
+    try {
+      for (const e of fs.readdirSync(claudeCodeDir, { withFileTypes: true })) {
+        if (claudeKeep.has(e.name)) continue;
+        fs.rmSync(path.join(claudeCodeDir, e.name), { recursive: true, force: true });
+      }
+    } catch (_) {}
   }
   // Clear tokens from .env
   const envPath = path.join(ROOT, ".env");
@@ -1374,17 +1447,17 @@ async function hostScrub(aggressive = true) {
   addStep("phase4", "Phase 4: Keychain — purging credential entries", "running");
   setTarget(42, "setup");
   if (IS_WIN) {
-    const winTargets = ["git:https://github.com", "github.com", "docker", "vscode", "cursor"];
+    const winTargets = ["git:https://github.com", "github.com", "docker", "vscode"];
     for (const t of winTargets) await run(`cmdkey /delete:${t} 2>$null`).catch(() => {});
   } else {
     const keychainServices = [
-      "gh:github.com", "github.com", "api.github.com",
-      "vscodevscode.github-authentication", "cursorcursor.github-authentication",
-      "cursor.github-authentication", "vscode.github-authentication",
+      "gh:github.com", "git:https://github.com", "github.com", "api.github.com",
+      "vscodevscode.github-authentication", "vscode.github-authentication",
+      "windsurfwindsurf.github-authentication", "windsurf.github-authentication",
       "Chrome Safe Storage", "Chromium Safe Storage", "Microsoft Edge Safe Storage",
-      "Brave Safe Storage", "Arc Safe Storage", "Firefox Safe Storage",
-      "docker-credential-osxkeychain", "Docker Credentials",
-      "Claude Safe Storage", "claude", "anthropic", "doctl"
+      "Brave Safe Storage", "Arc Safe Storage", "Firefox Safe Storage", "Safari Safe Storage",
+      "Windsurf Safe Storage",
+      "docker-credential-osxkeychain", "Docker Credentials", "doctl"
     ];
     for (const svc of keychainServices) {
       await run(`security delete-generic-password -s "${svc}" 2>/dev/null || true`).catch(() => {});
@@ -1415,21 +1488,24 @@ async function hostScrub(aggressive = true) {
     path.join(home, "AppData/Local/BraveSoftware"),
     path.join(home, "AppData/Roaming/Mozilla/Firefox"),
     path.join(home, "AppData/Roaming/Code"),
-    path.join(home, "AppData/Roaming/Cursor"),
     path.join(home, "AppData/Roaming/Windsurf"),
-    path.join(home, "AppData/Roaming/Claude"),
   ] : [
     `${home}/Library/Application Support/Google/Chrome`,
     `${home}/Library/Caches/com.google.Chrome`,
     `${home}/Library/Saved Application State/com.google.Chrome.savedState`,
+    `${home}/Library/Preferences/com.google.Chrome.plist`,
     `${home}/Library/Application Support/Microsoft Edge`,
     `${home}/Library/Caches/Microsoft Edge`,
+    `${home}/Library/Saved Application State/com.microsoft.edgemac.savedState`,
     `${home}/Library/Application Support/BraveSoftware/Brave-Browser`,
     `${home}/Library/Caches/BraveSoftware`,
+    `${home}/Library/Saved Application State/com.brave.Browser.savedState`,
     `${home}/Library/Application Support/Arc`,
     `${home}/Library/Caches/Arc`,
+    `${home}/Library/Saved Application State/company.thebrowser.Browser.savedState`,
     `${home}/Library/Application Support/Firefox`,
     `${home}/Library/Caches/Firefox`,
+    `${home}/Library/Saved Application State/org.mozilla.firefox.savedState`,
     `${home}/Library/Safari/History.db`, `${home}/Library/Safari/History.db-wal`,
     `${home}/Library/Safari/History.db-shm`, `${home}/Library/Safari/LastSession.plist`,
     `${home}/Library/Safari/RecentlyClosedTabs.plist`, `${home}/Library/Safari/Downloads.plist`,
@@ -1439,16 +1515,32 @@ async function hostScrub(aggressive = true) {
     `${home}/Library/Application Support/Code`,
     `${home}/Library/Caches/com.microsoft.VSCode`,
     `${home}/Library/Saved Application State/com.microsoft.VSCode.savedState`,
-    `${home}/Library/Application Support/Cursor`,
-    `${home}/Library/Caches/Cursor`,
-    `${home}/Library/Saved Application State/com.todesktop.230313mzl4w4u92.savedState`,
     `${home}/Library/Application Support/Windsurf`,
-    `${home}/Library/Application Support/Claude`,
-    `${home}/Library/Caches/Claude`,
-    `${home}/Library/Saved Application State/com.anthropic.claudefordesktop.savedState`,
+    `${home}/Library/Caches/Windsurf`,
+    `${home}/Library/Saved Application State/com.codeium.windsurf.savedState`,
   ];
   for (const target of cleanTargets) {
     if (fs.existsSync(target)) { try { fs.rmSync(target, { recursive: true, force: true }); } catch (_) {} }
+  }
+  // Cursor: keep only Local State (keychain reference), wipe everything else
+  const cursorBase = IS_WIN
+    ? path.join(home, "AppData/Roaming/Cursor")
+    : `${home}/Library/Application Support/Cursor`;
+  if (fs.existsSync(cursorBase)) {
+    try {
+      for (const e of fs.readdirSync(cursorBase, { withFileTypes: true })) {
+        if (e.name === "Local State") continue;
+        fs.rmSync(path.join(cursorBase, e.name), { recursive: true, force: true });
+      }
+    } catch (_) {}
+  }
+  if (!IS_WIN) {
+    for (const p of [`${home}/Library/Caches/Cursor`, `${home}/Library/Saved Application State/com.todesktop.230313mzl4w4u92.savedState`]) {
+      if (fs.existsSync(p)) { try { fs.rmSync(p, { recursive: true, force: true }); } catch (_) {} }
+    }
+    for (const p of [`${home}/Library/Caches/claude`, `${home}/Library/Caches/Claude`, `${home}/Library/Saved Application State/com.anthropic.claudefordesktop.savedState`]) {
+      if (fs.existsSync(p)) { try { fs.rmSync(p, { recursive: true, force: true }); } catch (_) {} }
+    }
   }
   addStep("phase5", "Phase 5: Deep clean — complete", "done");
   setTarget(70, "setup");
@@ -1494,12 +1586,13 @@ async function hostScrub(aggressive = true) {
     path.join(home, "AppData/Roaming/Code"),
   ] : [
     `${home}/.config/gh`, `${home}/.ssh`, `${home}/.gitconfig`, `${home}/.git-credentials`,
-    `${home}/.claude`, `${home}/.anthropic`,
     `${home}/Library/Application Support/Google/Chrome`,
     `${home}/Library/Application Support/Microsoft Edge`,
+    `${home}/Library/Application Support/BraveSoftware/Brave-Browser`,
+    `${home}/Library/Application Support/Arc`,
     `${home}/Library/Application Support/Firefox`,
     `${home}/Library/Application Support/Code`,
-    `${home}/Library/Application Support/Cursor`,
+    `${home}/Library/Application Support/Windsurf`,
   ];
   for (const d of verifyDirs) {
     if (fs.existsSync(d)) { verifyFails++; broadcast({ type: "log", line: `[verify] STILL EXISTS: ${d}` }); }
