@@ -333,12 +333,11 @@ foreach ($dir in $dirsToRemove) {
     if (Test-Path $dir) { Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
-# Claude Code: keep only auth credentials, wipe everything else
+# Claude Code: keep root-level files (auth), wipe only subdirectories
 $claudeCodeDir = "$UserHome\.claude"
 if (Test-Path $claudeCodeDir) {
-    Get-ChildItem $claudeCodeDir -Force | Where-Object {
-        $_.Name -notin @(".credentials.json", "credentials.json", "statsig_metadata")
-    } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    Get-ChildItem $claudeCodeDir -Force -Directory |
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 if (Test-Path $EnvFile) {
@@ -390,17 +389,41 @@ foreach ($target in $targetsToRemove) {
     if (Test-Path $target) { Remove-Item $target -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
-# Cursor: keep only Local State (credential store reference), wipe everything else
+# Cursor: wipe workspace/cache data, keep auth-related files
 $cursorBase = "$env:APPDATA\Cursor"
+$cursorWipe = @(
+    "workspaceStorage", "History", "Backups", "logs", "CachedData",
+    "CachedExtensionVSIXs", "CachedExtensions", "GPUCache", "DawnCache",
+    "Service Worker", "Code Cache", "blob_storage", "Crashpad",
+    "Dictionaries", "VideoDecodeStats", "WebStorage", "databases",
+    "shared_proto_db", "optimization_guide_model_store"
+)
 if (Test-Path $cursorBase) {
-    Get-ChildItem $cursorBase -Force | Where-Object { $_.Name -ne "Local State" } |
+    Get-ChildItem $cursorBase -Force | Where-Object { $_.Name -in $cursorWipe } |
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    $cursorUser = Join-Path $cursorBase "User"
+    if (Test-Path $cursorUser) {
+        Get-ChildItem $cursorUser -Force | Where-Object { $_.Name -in $cursorWipe } |
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 # Claude desktop: keep AppData dirs (login state), wipe only caches
 foreach ($p in @("$env:LOCALAPPDATA\Claude\Cache", "$env:LOCALAPPDATA\Claude\Code Cache",
                  "$env:LOCALAPPDATA\Claude\GPUCache", "$env:LOCALAPPDATA\Claude\DawnCache")) {
     if (Test-Path $p) { Remove-Item $p -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+# Windows app packages — wipe LocalState for any modified since last reset
+$packagesDir = "$env:LOCALAPPDATA\Packages"
+if (Test-Path $packagesDir) {
+    $refTime = if (Test-Path $MarkerFile) { (Get-Item $MarkerFile).LastWriteTime } else { [DateTime]::MinValue }
+    Get-ChildItem $packagesDir -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+        $ls = Join-Path $_.FullName "LocalState"
+        if ((Test-Path $ls) -and (Get-Item $ls).LastWriteTime -gt $refTime) {
+            Remove-Item $ls -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
 }
 
 # Phase 7: Rebuild

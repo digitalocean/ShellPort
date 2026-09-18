@@ -142,15 +142,24 @@ for dir in \
     [[ -e "$dir" ]] && rm -rf "$dir" 2>/dev/null || true
 done
 
-# Claude Code: keep auth credentials, wipe everything else
+# Claude Code: keep root-level files (auth), wipe only subdirectories
 if [[ -d "${GUI_HOME}/.claude" ]]; then
-    find "${GUI_HOME}/.claude" -mindepth 1 -maxdepth 1 \
-        ! -name ".credentials.json" ! -name "credentials.json" ! -name "statsig_metadata" \
+    find "${GUI_HOME}/.claude" -mindepth 1 -maxdepth 1 -type d \
         -exec rm -rf {} + 2>/dev/null || true
 fi
 
 # Claude/Anthropic caches only (auth lives in Application Support + keychain)
 rm -rf "${GUI_HOME}/Library/Caches/claude" "${GUI_HOME}/Library/Caches/Claude" 2>/dev/null || true
+
+# Revert candidate-installed tools (brew, /usr/local) to baseline
+if [[ -f "$MARKER_FILE" ]]; then
+    for tooldir in /opt/homebrew/bin /opt/homebrew/lib /opt/homebrew/Cellar /opt/homebrew/Caskroom \
+        /usr/local/bin /usr/local/lib /usr/local/Cellar /usr/local/Caskroom; do
+        [[ -d "$tooldir" ]] || continue
+        find "$tooldir" -newer "$MARKER_FILE" -type f -delete 2>/dev/null || true
+        find "$tooldir" -newer "$MARKER_FILE" -type d -empty -delete 2>/dev/null || true
+    done
+fi
 
 # Scrub tokens from .env
 if [[ -f "$ENV_FILE" ]]; then
@@ -185,12 +194,22 @@ info "Phase 5: Keychain — complete"
 # ========== PHASE 6: Deep clean IDEs and browsers ==========
 info "Phase 6: Deep clean — wiping IDE and browser data"
 
-# Cursor: keep only Local State (keychain reference), wipe everything else
+# Cursor: wipe workspace/cache data, keep auth-related files
 CURSOR_BASE="${GUI_HOME}/Library/Application Support/Cursor"
 if [[ -d "$CURSOR_BASE" ]]; then
-    find "$CURSOR_BASE" -mindepth 1 -maxdepth 1 \
-        ! -name "Local State" \
-        -exec rm -rf {} + 2>/dev/null || true
+    for junk in workspaceStorage History Backups logs CachedData \
+        CachedExtensionVSIXs CachedExtensions GPUCache DawnCache \
+        "Service Worker" "Code Cache" blob_storage Crashpad \
+        Dictionaries VideoDecodeStats WebStorage databases \
+        shared_proto_db optimization_guide_model_store; do
+        rm -rf "${CURSOR_BASE}/${junk}" 2>/dev/null || true
+    done
+    # Also wipe inside User/ subdirectory
+    if [[ -d "${CURSOR_BASE}/User" ]]; then
+        for junk in workspaceStorage History Backups logs CachedData; do
+            rm -rf "${CURSOR_BASE}/User/${junk}" 2>/dev/null || true
+        done
+    fi
 fi
 rm -rf "${GUI_HOME}/Library/Caches/Cursor" 2>/dev/null || true
 rm -rf "${GUI_HOME}/Library/Saved Application State/com.todesktop.230313mzl4w4u92.savedState" 2>/dev/null || true
@@ -198,6 +217,19 @@ rm -rf "${GUI_HOME}/Library/Saved Application State/com.todesktop.230313mzl4w4u9
 # Claude desktop: wipe caches and saved state, keep Application Support (has auth)
 rm -rf "${GUI_HOME}/Library/Caches/Claude" 2>/dev/null || true
 rm -rf "${GUI_HOME}/Library/Saved Application State/com.anthropic.claudefordesktop.savedState" 2>/dev/null || true
+
+# Sandboxed app containers — wipe any modified since last reset
+for base in "Containers" "Group Containers"; do
+    BASE_DIR="${GUI_HOME}/Library/${base}"
+    [[ -d "$BASE_DIR" ]] || continue
+    if [[ -f "$MARKER_FILE" ]]; then
+        find "$BASE_DIR" -mindepth 1 -maxdepth 1 -type d -newer "$MARKER_FILE" \
+            -exec rm -rf {} + 2>/dev/null || true
+    else
+        find "$BASE_DIR" -mindepth 1 -maxdepth 1 -type d \
+            -exec rm -rf {} + 2>/dev/null || true
+    fi
+done
 
 # Everything else: full wipe
 for target in \
@@ -249,6 +281,13 @@ done
 rm -f "${PROJECT_ROOT}/.session_snapshot" "${PROJECT_ROOT}/.session_snapshot.json" 2>/dev/null || true
 rm -rf "${PROJECT_ROOT}/.timer" 2>/dev/null || true
 rm -f "${PROJECT_ROOT}/.current_question" 2>/dev/null || true
+
+# Update host tools between candidates
+if command -v brew &>/dev/null; then
+    info "Updating host tools..."
+    as_user "brew update && brew upgrade" 2>/dev/null || true
+    as_user "npm update -g @anthropic-ai/claude-code" 2>/dev/null || true
+fi
 info "Phase 7: Rebuild — complete"
 
 # ========== PHASE 8: Verify ==========

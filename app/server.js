@@ -335,19 +335,26 @@ const BYOD_DIRS = ["Desktop", "Documents", "Downloads"].map((d) => path.join(HOM
 
 const ADMIN_SKIP_HOME = new Set([
   "Applications", ".Trash", ".docker", ".buildx", ".orbstack", "shellport",
+  ".claude", ".cursor",
 ]);
 const LIB_SCAN_SKIP = new Set([
-  "Application Support", "Caches", "Containers", "Cookies", "Developer",
-  "Fonts", "Group Containers", "HomeKit", "Input Methods", "Keychains",
-  "LaunchAgents", "Logs", "Mail", "Messages", "Metadata",
+  "Application Support", "Caches", "Cookies", "Developer",
+  "Fonts", "HomeKit", "Input Methods", "Keychains",
+  "LaunchAgents", "Logs", "Mail", "Metadata",
   "Preferences", "Saved Application State", "Sounds", "Spelling",
   "SyncedPreferences", "WebKit",
 ]);
+
+// Paths outside $HOME where tools get installed
+const TOOL_DIRS = IS_WIN
+  ? []
+  : ["/opt/homebrew", "/usr/local/bin", "/usr/local/lib", "/usr/local/Cellar", "/usr/local/Caskroom"];
 
 function workDirs() {
   if (!ADMIN_MODE) return BYOD_DIRS;
   const dirs = [HOME_DIR];
   if (fs.existsSync("/tmp")) dirs.push("/tmp");
+  for (const d of TOOL_DIRS) { if (fs.existsSync(d)) dirs.push(d); }
   return dirs;
 }
 
@@ -1422,14 +1429,12 @@ async function hostScrub(aggressive = true) {
     const full = path.join(home, dir);
     if (fs.existsSync(full)) { try { fs.rmSync(full, { recursive: true, force: true }); } catch (_) {} }
   }
-  // Claude Code: keep auth credentials, wipe everything else
+  // Claude Code: keep root-level files (auth), wipe only subdirectories
   const claudeCodeDir = path.join(home, ".claude");
-  const claudeKeep = new Set([".credentials.json", "credentials.json", "statsig_metadata"]);
   if (fs.existsSync(claudeCodeDir)) {
     try {
       for (const e of fs.readdirSync(claudeCodeDir, { withFileTypes: true })) {
-        if (claudeKeep.has(e.name)) continue;
-        fs.rmSync(path.join(claudeCodeDir, e.name), { recursive: true, force: true });
+        if (e.isDirectory()) fs.rmSync(path.join(claudeCodeDir, e.name), { recursive: true, force: true });
       }
     } catch (_) {}
   }
@@ -1522,17 +1527,32 @@ async function hostScrub(aggressive = true) {
   for (const target of cleanTargets) {
     if (fs.existsSync(target)) { try { fs.rmSync(target, { recursive: true, force: true }); } catch (_) {} }
   }
-  // Cursor: keep only Local State (keychain reference), wipe everything else
+  // Cursor: wipe workspace/cache data, keep auth-related files
   const cursorBase = IS_WIN
     ? path.join(home, "AppData/Roaming/Cursor")
     : `${home}/Library/Application Support/Cursor`;
+  const cursorWipe = new Set([
+    "workspaceStorage", "History", "Backups", "logs", "CachedData",
+    "CachedExtensionVSIXs", "CachedExtensions", "GPUCache", "DawnCache",
+    "Service Worker", "Code Cache", "blob_storage", "Crashpad",
+    "Dictionaries", "VideoDecodeStats", "WebStorage", "databases",
+    "shared_proto_db", "optimization_guide_model_store",
+  ]);
   if (fs.existsSync(cursorBase)) {
     try {
       for (const e of fs.readdirSync(cursorBase, { withFileTypes: true })) {
-        if (e.name === "Local State") continue;
-        fs.rmSync(path.join(cursorBase, e.name), { recursive: true, force: true });
+        if (cursorWipe.has(e.name)) fs.rmSync(path.join(cursorBase, e.name), { recursive: true, force: true });
       }
     } catch (_) {}
+    // Also wipe inside User/ subdirectory
+    const cursorUser = path.join(cursorBase, "User");
+    if (fs.existsSync(cursorUser)) {
+      try {
+        for (const e of fs.readdirSync(cursorUser, { withFileTypes: true })) {
+          if (cursorWipe.has(e.name)) fs.rmSync(path.join(cursorUser, e.name), { recursive: true, force: true });
+        }
+      } catch (_) {}
+    }
   }
   if (!IS_WIN) {
     for (const p of [`${home}/Library/Caches/Cursor`, `${home}/Library/Saved Application State/com.todesktop.230313mzl4w4u92.savedState`]) {
@@ -1540,6 +1560,25 @@ async function hostScrub(aggressive = true) {
     }
     for (const p of [`${home}/Library/Caches/claude`, `${home}/Library/Caches/Claude`, `${home}/Library/Saved Application State/com.anthropic.claudefordesktop.savedState`]) {
       if (fs.existsSync(p)) { try { fs.rmSync(p, { recursive: true, force: true }); } catch (_) {} }
+    }
+  }
+  // macOS sandboxed app containers — wipe any modified since last reset
+  if (!IS_WIN) {
+    const marker = path.join(ROOT, ".last_station_reset");
+    const markerMs = fs.existsSync(marker) ? fs.statSync(marker).mtimeMs : 0;
+    for (const base of ["Containers", "Group Containers"]) {
+      const dir = `${home}/Library/${base}`;
+      if (!fs.existsSync(dir)) continue;
+      try {
+        for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+          if (!e.isDirectory()) continue;
+          const full = path.join(dir, e.name);
+          try {
+            const stat = fs.statSync(full);
+            if (markerMs === 0 || stat.mtimeMs > markerMs) fs.rmSync(full, { recursive: true, force: true });
+          } catch (_) {}
+        }
+      } catch (_) {}
     }
   }
   addStep("phase5", "Phase 5: Deep clean — complete", "done");

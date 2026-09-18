@@ -100,6 +100,25 @@ fi
 # Set OrbStack to start at login
 defaults write com.orbstack.OrbStack AutoStart -bool true 2>/dev/null || true
 
+# Install host-level tools (mirrors container so candidates don't need to install anything)
+if command -v brew &>/dev/null; then
+    info "Installing interview tools on host..."
+    brew update 2>/dev/null || true
+    brew install go python@3 openjdk@21 node gh doctl kubectl terraform \
+        s3cmd ripgrep jq yq neovim imagemagick helm tree httpie 2>/dev/null || true
+    brew upgrade 2>/dev/null || true
+    # Symlink Java so it's on PATH
+    sudo ln -sfn "$(brew --prefix openjdk@21)/libexec/openjdk.jdk" \
+        /Library/Java/JavaVirtualMachines/openjdk-21.jdk 2>/dev/null || true
+    # Claude Code
+    if command -v npm &>/dev/null; then
+        npm install -g @anthropic-ai/claude-code 2>/dev/null || true
+    fi
+    info "Host tools installed."
+else
+    warn "Homebrew not found — host tools not installed. Candidates may try to install their own."
+fi
+
 # Clean previous install
 [[ -d "${INSTALL_DIR}" ]] && { info "Removing previous installation..."; rm -rf "${INSTALL_DIR}"; }
 

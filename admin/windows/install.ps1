@@ -66,6 +66,26 @@ $dockerCheck = docker info 2>&1
 if ($LASTEXITCODE -ne 0) { Stop-Fatal "Docker is not running. Start Docker Desktop and try again." }
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) { Stop-Fatal "Node.js not found. Install from https://nodejs.org first." }
 
+# Install host-level tools (mirrors container so candidates don't need to install anything)
+if (Get-Command winget -ErrorAction SilentlyContinue) {
+    Write-Info "Installing interview tools on host..."
+    $wingetPkgs = @(
+        "GoLang.Go", "Python.Python.3.12", "Oracle.JDK.21",
+        "GitHub.cli", "DigitalOcean.Doctl", "Kubernetes.kubectl",
+        "Hashicorp.Terraform", "jqlang.jq", "MikeFarah.yq",
+        "Neovim.Neovim", "ImageMagick.ImageMagick", "BurntSushi.ripgrep.MSVC",
+        "HTTPie.HTTPie", "GnuWin32.Tree"
+    )
+    foreach ($pkg in $wingetPkgs) {
+        winget install --id $pkg --accept-package-agreements --accept-source-agreements --silent 2>$null
+    }
+    # Claude Code
+    npm install -g @anthropic-ai/claude-code 2>$null
+    Write-Info "Host tools installed."
+} else {
+    Write-Warn "winget not found - host tools not installed. Candidates may try to install their own."
+}
+
 # Clean previous install
 if (Test-Path $InstallDir) {
     Write-Info "Removing previous installation..."
